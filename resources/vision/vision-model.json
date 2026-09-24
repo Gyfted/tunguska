@@ -1,7 +1,23 @@
 {
+  "model_version": "vision-0.9",
+  "test_selective": {
+    "total": 1797,
+    "accepted": 1740,
+    "correct": 1702
+  },
   "dataset": "UCI Optical Recognition of Handwritten Digits",
   "doi": "10.24432/C50P49",
   "license": "CC-BY-4.0",
+  "augmented": true,
+  "uncertainty_margin": 9,
+  "validation_selective": {
+    "total": 1000,
+    "accepted": 965,
+    "correct": 946
+  },
+  "int8_correct": 1750,
+  "int8_kind": "symmetric per-layer weight-only quantization; float hidden activations; 8 bytes of scales",
+  "augmentation": "50% fitting examples: rotations +/-10 degrees, shifts +/-0.45 cells, scales 0.9-1.1, stroke variation +/-12%",
   "archive_sha256": "0d7b054fea010270e9b3f06411c654c5e59547732ad626381980baffe0a23fb0",
   "seed": 729,
   "numpy": "2.3.5",
@@ -14,14 +30,15 @@
   "fit_samples": 3323,
   "validation_samples": 500,
   "test_samples": 1797,
-  "checkpoint_selection": "lowest training-split validation cross entropy",
-  "ternary_validation_loss": 0.06832461055715834,
-  "float_validation_loss": 0.06636597653217698,
-  "ternary_correct": 1711,
-  "float32_correct": 1724,
-  "nonzero_weights": 2483,
+  "checkpoint_selection": "lowest mean clean/jittered validation cross entropy",
+  "ternary_validation_loss": 0.11084927940784342,
+  "float_validation_loss": 0.08166715729344835,
+  "ternary_correct": 1727,
+  "float32_correct": 1750,
+  "nonzero_weights": 2579,
   "hidden_rule": "clamp(floor((dot(input, ternary_weights) + integer_bias) / 8), 0, 81)",
   "output_rule": "dot(hidden, ternary_weights) + integer_bias; lowest index wins ties",
-  "model_sha256": "420b81fd5016e4ac639115ab8f6523cc44559103189d8886b266ae4bef67feb3",
+  "int8_weights_sha256": "8d4c05a51433f48b640c71f70cd7547483fdeddbdb5bc364e6419d6890a6e773",
+  "model_sha256": "229f9aaabca9972dc72281966e97ee0b43c863e40833fd4ee03348ebb7751292",
   "test_data_sha256": "d2d9e6935ec8851a131372d27e42fe7f822fa70974e3fbc95dcefa94b0a13e67"
 }

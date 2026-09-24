@@ -75,8 +75,14 @@ build/boot.ternobj: build/tg_assembler $(wildcard resources/memory_image_asm/*.a
 build/runtime.o: src/runtime.cc src/runtime.h Makefile | build
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -MMD -MP -c $< -o $@
 
-build/vision.ternobj: resources/vision/inference.3c build/3cc build/tg_assembler scripts/compile_3cc.py
+build/vision-reference.ternobj: resources/vision/inference.3c build/3cc build/tg_assembler scripts/compile_3cc.py
 	python3 scripts/compile_3cc.py $< -o $@
+
+build/vision.asm: resources/vision/vision-weights.bin scripts/build_vision_guest.py | build
+	python3 scripts/build_vision_guest.py $< $@
+
+build/vision.ternobj: build/vision.asm build/tg_assembler
+	build/tg_assembler -o $@ $<
 
 build/vision.o: src/vision.cc src/vision.h resources/vision/model.h Makefile | build
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -MMD -MP -c $< -o $@
@@ -94,7 +100,7 @@ app: build/Tunguska build/boot.ternobj build/boot-3cc.ternobj build/vision.terno
 	mkdir -p build/Tunguska.app/Contents/MacOS build/Tunguska.app/Contents/Resources
 	cp build/Tunguska build/Tunguska.app/Contents/MacOS/Tunguska.new
 	mv -f build/Tunguska.app/Contents/MacOS/Tunguska.new build/Tunguska.app/Contents/MacOS/Tunguska
-	cp build/boot.ternobj build/boot-3cc.ternobj build/vision.ternobj resources/vision/vision-digits.bin resources/vision/vision-model.json resources/vision/vision-weights.bin resources/vision/VISION-NOTICE.md LICENSE AUTHORS NOTICE.md build/Tunguska.app/Contents/Resources/
+	cp build/boot.ternobj build/boot-3cc.ternobj build/vision.ternobj resources/vision/vision-digits.bin resources/vision/vision-model.json resources/vision/vision-weights.bin resources/vision/vision-int8-weights.bin resources/vision/VISION-NOTICE.md LICENSE AUTHORS NOTICE.md build/Tunguska.app/Contents/Resources/
 	cp src/macos/Info.plist build/Tunguska.app/Contents/Info.plist
 	codesign --force --sign - --options runtime --entitlements src/macos/Tunguska.entitlements build/Tunguska.app
 
@@ -143,14 +149,14 @@ run: app
 build/vision-tests: tests/vision_tests.cc build/vision.o build/runtime.o $(OBJECTS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc $^ $(LDLIBS) -o $@
 
-vision-check: build/vision-tests build/vision.ternobj
+vision-check: build/vision-tests build/vision.ternobj build/vision-reference.ternobj
 	python3 tests/vision_assets.py
-	build/vision-tests build/vision.ternobj resources/vision/vision-digits.bin > build/vision-tests.log 2>&1 || { tail -30 build/vision-tests.log; exit 1; }
-	@tail -2 build/vision-tests.log
+	build/vision-tests build/vision.ternobj resources/vision/vision-digits.bin --reference build/vision-reference.ternobj > build/vision-tests.log 2>&1 || { tail -30 build/vision-tests.log; exit 1; }
+	@tail -3 build/vision-tests.log
 
 build/vision-tests-sanitized: tests/vision_tests.cc src/vision.cc src/vision.h resources/vision/model.h src/runtime.cc src/runtime.h $(wildcard src/core/*.cc src/core/*.h) Makefile | build
 	$(CXX) $(CPPFLAGS) -Isrc -std=c++17 -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer tests/vision_tests.cc src/vision.cc src/runtime.cc $(addprefix src/core/,$(addsuffix .cc,$(CORE))) $(LDLIBS) -o $@
 
-vision-sanitize: build/vision-tests-sanitized build/vision.ternobj
-	UBSAN_OPTIONS=halt_on_error=1 build/vision-tests-sanitized build/vision.ternobj resources/vision/vision-digits.bin --quick > build/vision-sanitized.log 2>&1 || { tail -30 build/vision-sanitized.log; exit 1; }
-	@tail -2 build/vision-sanitized.log
+vision-sanitize: build/vision-tests-sanitized build/vision.ternobj build/vision-reference.ternobj
+	UBSAN_OPTIONS=halt_on_error=1 build/vision-tests-sanitized build/vision.ternobj resources/vision/vision-digits.bin --quick --reference build/vision-reference.ternobj > build/vision-sanitized.log 2>&1 || { tail -30 build/vision-sanitized.log; exit 1; }
+	@tail -3 build/vision-sanitized.log

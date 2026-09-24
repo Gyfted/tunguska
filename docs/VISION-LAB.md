@@ -1,46 +1,51 @@
 # Ternary Vision Lab
 
 Open **Ternary Vision Lab** in the sidebar or **Machine → Ternary Vision Lab**
-(⌘L). This is an offline handwritten-digit classifier running inside Tunguska,
-with an independently calculated float32 baseline on the Mac. The lab pauses
-the original OS and uses its own machine, leaving the original guest intact.
+(⌘L). Draw a digit, inspect the network, compare three numerical models, and
+explore their mistakes. Everything runs offline. The lab pauses the original OS
+and uses its own machine, leaving the original guest intact.
 
 ## Try it
 
-1. Choose **Run inference** on the first held-out digit. Its 54 hidden
-   activations and ten integer scores are calculated by the guest CPU.
-2. Choose **Next sample**, or **Clear** and draw a large, centered digit.
-   Drag to paint; right-drag to erase. The 32×32 ink surface reduces to 8×8
-   counts from 0 to 16. There is no automatic centering or rotation correction.
-3. Click a hidden neuron's weight map or choose it from the neuron selector.
-   Green weights add, orange weights subtract, and dark weights skip inputs.
-   The detail view shows its bias, reference arithmetic, guest activation and
-   memory address. Labels under the maps are `neuron:activation`.
-4. Choose **Debug guest** to restart a finished prediction paused, or pause an
-   active one. Step through real compiled 3CC instructions, inspect memory,
-   add breakpoints and Continue. Resume also works from the lab. A new
-   inference resets the machine and clears its breakpoints.
-5. **Benchmark** runs the first 100 official test records, or all 1,797, through
-   both models. It remains responsive and supports Pause/Resume and Cancel.
-   A full UI run may take several minutes. Partial results are retained.
-6. **Export report…** saves JSON containing model provenance, current input,
-   hidden activations and scores, and the last benchmark's per-sample results,
-   timings, instruction counts and confusion matrix (true labels as rows).
-   Saving uses a native file panel and an atomic, coordinated write.
+1. Choose **Run inference** on the first historical test digit. **Ternary CPU**
+   computes its 54 hidden activations and ten integer scores on the guest.
+   **Fast on Mac** runs the same ternary model directly on the Mac's binary CPU.
+2. Choose **Next sample**, or **Clear** and draw one digit. Drag to paint;
+   right-drag to erase. **Center and resize drawings** fits the ink into a
+   centered square while preserving aspect ratio. The small preview shows the
+   exact 8×8 input shared by all three models. Turn the checkbox off to compare
+   the original drawing. Dataset samples always retain their original pixels.
+3. Blank, tiny and almost-solid drawings prompt you to try again without making
+   a prediction. When the top two ternary scores are too close, the lab says
+   **Not sure** and shows both choices. Scores are ranking values, not probabilities.
+4. Click a hidden neuron's weight map or choose it from the selector. Green
+   weights add, orange weights subtract, and dark weights skip inputs. The detail
+   shows its bias, reference arithmetic, activation and guest memory address.
+5. **Show mistakes…** lists raw top-choice errors on the historical test set.
+   Filter by true digit or include any model's mistakes. The right-hand heat map
+   erases one input cell at a time and measures its effect on the original
+   predicted-class score. Green means erasing lowers that score; orange means
+   erasing raises it. This sensitivity experiment is not a causal explanation.
+   **Open this sample in the lab** loads the selected input for inference/debugging.
+6. **Debug guest** starts or pauses the real guest even in Fast mode. Step through
+   ordinary Tunguska instructions, inspect memory, add breakpoints and Continue.
+   A new debug run resets the machine and clears breakpoints.
+7. **Benchmark** runs the first 100 records or all 1,797 through all three models.
+   The selected execution mode determines how ternary results are produced.
+   Pause/Resume and Cancel retain partial results. Raw accuracy, the percentage
+   answered, and accuracy among answers are reported separately.
+8. **Export report…** saves JSON with provenance, raw and prepared input,
+   activations/scores, execution mode, uncertainty, per-sample benchmark results,
+   timings, instruction counts and the raw ternary confusion matrix (true labels
+   as rows). Saving uses a native file panel and an atomic, coordinated write.
 
-Inputs changed while the guest runs cancel that prediction. Scores are raw
-integer ranking values, **not calibrated probabilities**. A blank canvas still
-produces a classification; the model has no “unknown” or rejection class.
-User drawings are not necessarily distributed like the historical test set.
+Changing the input or mode cancels an active prediction. Drawing preparation uses
+32×32 ink, an ink bounding box fitted inside 28×28, bilinear interpolation and
+4×4 reduction to 8×8 counts from 0 to 16. It centers and rescales; it does not
+straighten handwriting. Rejection heuristics detect obvious input problems, not
+arbitrary unknown objects. A non-digit can still receive a confident answer.
 
 ## What executes where
-
-`resources/vision/inference.3c` is compiled by the restored 3CC compiler and
-assembled during a normal build. A separate Runtime loads that image. The host
-copies 64 pixels, learned ternary weights and integer biases into guest memory.
-The guest computes every matrix product with **add, subtract or skip**. It then
-normalizes hidden activations with integer division by eight and clips to 0…81.
-It does not call the host model or read precomputed classifications.
 
 The network has 64 inputs, 54 hidden neurons and ten output scores:
 
@@ -50,21 +55,37 @@ s[k] = bias2[k] + sum(weight2[k,j] * h[j])
 prediction = index of largest score (lowest index wins ties)
 ```
 
-Division follows integer truncation after the nonnegative clamp. The host's
-integer reference independently evaluates the same function; all 54 guest
-activations and all ten scores must match before the result is accepted. The
-float32 baseline is a separately trained network of the same size, using ReLU
-and float32 multiply/add arithmetic. It is not used to complete guest inference.
+Division truncates after the nonnegative clamp. Every ternary weight is −1, 0 or
++1. The host's dense integer reference independently evaluates this function;
+all 54 activations and ten scores must match before accepting either the sparse
+native result or the guest result.
 
-The guest has a ten-million-instruction limit. UI execution yields after about
-5 ms or 100,000 instructions per timer tick, whichever is reached first; the
-existing runtime checks time every 1,024 instructions. Debugger execution uses
-the same session and limit. Closing the lab cancels execution.
+At build time, `scripts/build_vision_guest.py` specializes the packed weights into
+ordinary Tunguska assembly: add for +1, subtract for −1, and emit no matrix work
+for zero. This removes repeated loops, address arithmetic and weight branches.
+No new ISA or host callback completes the guest's inference. Biases and inputs
+are still read from guest memory. The preserved readable
+`resources/vision/inference.3c` builds a separate reference guest for testing.
+
+The native ternary path builds sparse lists once and evaluates the same add/subtract
+network. The float32 baseline is a separately trained network of the same size,
+using float ReLU and multiply/add arithmetic. The 8-bit baseline quantizes that
+float network's weights symmetrically to −127…127 using one scale per layer.
+Its hidden activations and biases remain float32; it is **weight-only 8-bit
+quantization**, not a fully integer inference engine. These baselines make
+independent predictions and never complete ternary inference.
+
+A cleanly completed guest can reuse its loaded machine on the next prediction.
+Inputs, outputs, progress, biases and weight-inspection memory are reinitialized.
+Cancelled, paused/debugged or breakpoint-bearing sessions take a full reset.
+The guest has a ten-million-instruction limit; UI execution yields after about
+5 ms or 100,000 instructions per timer tick, whichever is reached first. The
+runtime checks time every 1,024 instructions. Closing the lab cancels execution.
 
 ## Memory map
 
-Addresses below are decimal tryte addresses; words store their high tryte first.
-They do not overlap the program, system registers or 3CC stack.
+Addresses are decimal tryte addresses; words store their high tryte first.
+They do not overlap the program, system registers or stack.
 
 | Address | Length | Contents |
 | --- | ---: | --- |
@@ -74,96 +95,117 @@ They do not overlap the program, system registers or 3CC stack.
 | 100010 | 64 trytes | Pixels, 0…16 |
 | 100100 | 54 trytes | Hidden activations, 0…81 |
 | 100200 | 20 trytes | Ten signed, two-tryte scores |
-| 110000 | 3,996 trytes | Hidden weights followed by output weights, row-major |
+| 110000 | 3,996 trytes | Expanded weights for inspection, hidden then output, row-major |
 | 114000 | 128 trytes | 54 hidden and ten output biases, each a two-tryte word |
 
-The host expands packed weights into one full tryte each to make guest memory
-inspection straightforward. This is not a compact emulator memory layout.
+The optimized program embeds weight choices in its instructions; editing the
+inspection copy does not change that program. Rebuild after changing weights.
+The 3CC reference reads the expanded weights directly. Neither layout is compact
+emulator memory storage.
 
-## Model and fair comparison
+## Model and comparison
 
 The [UCI Optical Recognition of Handwritten Digits dataset](https://doi.org/10.24432/C50P49)
 by **E. Alpaydin and C. Kaynak (1998)** supplies 3,823 official training records
-and 1,797 official test records from different writers. The test records retain
-their original order. From training only, a seeded split uses 3,323 records for
-fitting and 500 for validation/checkpoint selection. Each model trains for 180
-epochs; its lowest validation-cross-entropy checkpoint is exported. No test
-records influence weights or checkpoint selection. This is one fixed training
-run, not a multi-seed estimate or a state-of-the-art accuracy claim.
+and 1,797 official test records from different writers, retained in original order.
+A seeded training-only split uses 3,323 records for fitting and 500 for validation.
+Half of each fitting batch receives small random rotations (±10°), translations
+(±0.45 cell), scale changes (0.9…1.1) and stroke changes (±12%).
 
-The quantized model uses straight-through gradients for rounded/clipped weights,
-integer biases and hidden activations. Training uses NumPy on the host;
-optimization uses floating point. Only exported inference uses ternary weights.
-See the complete algorithm in `scripts/train_vision.py` and recorded settings,
-software version and hashes in `resources/vision/vision-model.json`.
+Both models train for 180 epochs. Checkpoints use the lowest mean cross entropy
+across 500 clean validation inputs and 500 deterministically jittered views of
+those same inputs: **500 independent records, not 1,000**. The ternary model
+uses straight-through gradients for rounded/clipped weights, integer biases and
+activations. Training/optimization uses host floating point.
 
-| Measurement | Ternary network | Float32 baseline |
-| --- | ---: | ---: |
-| Correct on all 1,797 held-out digits | 1,711 (95.21%) | 1,724 (95.94%) |
-| Weights | 3,996 | 3,996 |
-| Encoded weight payload | 800 bytes | 15,984 bytes |
-| Bias payload, 64 × 32 bits | 256 bytes | 256 bytes |
-| Matrix arithmetic per prediction | 2,483 adds/subtracts; 1,513 skips | 3,996 multiply/add pairs |
+The uncertainty threshold is selected only from those validation views: choose
+the smallest score gap meeting at least 98% selective accuracy and 50% coverage.
+The selected gap is **9** (a gap below 9 abstains). It answered 965/1,000 validation
+views with 946 correct. This is an empirical rule, not calibrated confidence or
+a guarantee of 98% accuracy on other inputs.
 
-`vision-weights.bin` really is 800 bytes: five weights per byte, each mapped from
-−1/0/+1 to 0/1/2 and stored least-significant-trit first. The last byte has one
-used weight; its unused positions are zero. The same packed values are compiled
-into the app. The float32 weight payload comparison is 3,996 × 4 bytes. This is
-about **20× smaller for weights**, or **15.4× including the stated biases**.
-These are payload sizes, not total app, executable, guest RAM or process RSS.
-The app additionally contains the baseline, dataset, metadata, emulator and UI.
+| Historical test measurement | Ternary | Float32 | 8-bit weights |
+| --- | ---: | ---: | ---: |
+| Correct out of all 1,797, before abstention | 1,727 (96.10%) | 1,750 (97.38%) | 1,750 (97.38%) |
+| Weight count | 3,996 | 3,996 | 3,996 |
+| Encoded weight payload | 800 B | 15,984 B | 3,996 B |
+| Bias payload | 256 B | 256 B | 256 B |
+| Additional scales | — | — | 8 B |
 
-The operation count excludes address calculation, loops, bias loads, normalization
-and other instructions. The current 3CC guest executes roughly 455,000 machine
-instructions per prediction. A packed ternary model can also run on an ordinary
-binary processor; this project does not demonstrate a hardware advantage.
+With abstention, ternary answers **1,740/1,797 (96.83%)**, including **1,702 correct
+(97.82% of answers)**; 57 inputs receive “Not sure.” Raw accuracy always includes
+all inputs. The confusion matrix and mistake browser use raw choices, including
+those withheld by the uncertainty rule.
 
-Timing measures the guest runtime's active execution calls and the native scalar
-C++ baseline separately. Setup, model copying and UI waits are excluded from
-active guest time and included in the benchmark's displayed elapsed time.
-Native single-sample timings include timer overhead and are noisy; no speedup
-ratio is claimed. Timing after manual debugger stepping is omitted from the
-single-prediction display. The Mac's native baseline is much faster than emulation.
-The 100-sample subset can have different accuracy from the full held-out corpus.
+Version 0.8 scored 95.21% ternary and 95.94% float32 on this same test set. These
+results are historical benchmarks: earlier errors informed the decision to add
+augmentation. Test inputs were not used for gradient training, checkpoint or
+threshold selection, but this is **not a fresh independent generalization study**.
+One fixed training run was exported. New user drawings may differ substantially;
+collect a new, consented evaluation set before making broader claims.
 
-## Reproduce training
+`vision-weights.bin` really is 800 bytes: five weights per byte, mapped from
+−1/0/+1 to 0/1/2, least-significant trit first. The last byte uses one weight;
+unused positions are zero. This is about 20× smaller than float32 weights and
+5× smaller than 8-bit weights. Including stated biases, the float32 ratio is
+15.4×. These are numerical payload sizes, **not total executable size, guest RAM
+or process RSS**. Generated guest code embeds the sparse structure; native mode
+also stores expanded indices/weights. The app includes all baselines and data.
 
-Normal builds are offline and require no Python packages. The checked-in assets
-and compiled guest are sufficient. Retraining is optional and needs NumPy
-(the recorded run uses 2.3.5) and the official UCI archive:
+The new model has 2,579 nonzero weights and 1,417 zeros. Matrix products perform
+2,579 additions/subtractions; addressing, bias loads, normalization and other
+instructions are extra. Across the first 30 test records, optimized code executes
+328,119 instructions versus 13,757,644 for the same model's 3CC reference: about
+**42× fewer guest instructions**, roughly 10,937 per prediction. This is a software
+optimization, not evidence of ternary hardware superiority.
+
+Guest timing measures active runtime calls, excluding setup/model copying/UI
+waits. Elapsed benchmark time includes those costs and repeated native timing.
+Each native path is warmed once, then averaged over 64 scalar C++ calls. Timings
+are noisy and are not optimized CPU/GPU-library or energy benchmarks. Benchmark
+native totals sum those per-input averages, not the time spent on all repetitions.
+Guest timings after manual debugger stepping are omitted from the single-result
+display. Fast mode avoids emulation; the Mac still uses binary hardware.
+
+## Reproduce training and tests
+
+Normal builds are offline and require no Python packages. Retraining is optional
+and needs NumPy (the recorded run uses 2.3.5) and the official UCI archive:
 
 ```
 https://archive.ics.uci.edu/static/public/80/optical%2Brecognition%2Bof%2Bhandwritten%2Bdigits.zip
 ```
 
-The trainer checks this archive's SHA-256 before reading either CSV:
+The trainer checks the archive SHA-256 before reading named CSV members:
 
 ```
 0d7b054fea010270e9b3f06411c654c5e59547732ad626381980baffe0a23fb0
 ```
 
 ```sh
-python3 scripts/train_vision.py /path/to/optdigits.zip
+OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 python3 scripts/train_vision.py /path/to/optdigits.zip --augment
 make -j4 app
 make vision-check vision-sanitize
 ```
 
-Seed, split, epochs and architecture are fixed in the script. Exact numerical
-reproduction may depend on NumPy/BLAS and the platform. `--output /path/to/folder`
-lets you compare newly trained assets without replacing the checked-in model.
-The trainer only reads named members of the pinned archive and never downloads,
-executes archive contents, or extracts arbitrary archive paths.
+The seed, split, epochs and architecture are fixed. `--output /path/to/folder`
+compares new assets without replacing the bundled model. Exact reproduction may
+depend on NumPy/BLAS and platform; repeated training on this host reproduced all
+five generated assets byte for byte. The trainer never downloads, executes archive
+contents or extracts arbitrary paths. Full settings and hashes are recorded in
+`resources/vision/vision-model.json`.
 
-`vision-check` verifies the actual packed file and data/model hashes, checks
-all 1,797 test records against both models, and executes **every test record on
-the guest with exact activation/score parity**. It also covers zero/full/checkerboard
-and seeded random inputs, corrupt datasets, invalid pixels, tie handling,
-breakpoints, pause/step, cancellation/restart, intentional reference mismatch and
-an infinite guest's instruction limit. `vision-sanitize` runs these controls and
-30 guest test records under ASan/UBSan, while checking full-corpus host accuracy.
-The release preparation pipeline includes both targets.
+`vision-check` checks asset hashes/encoding and all three models' full-corpus
+accuracy. Every one of the 1,797 inputs executes on the optimized guest with exact
+activation/score parity against the independent host reference and native sparse
+kernel. Thirty also execute on the preserved 3CC reference. Tests cover drawing
+normalization/rejection, uncertainty boundaries/ties, sensitivity, malformed
+inputs, pause/step/breakpoints, reuse/reset, cancellation, intentional reference
+mismatch and an infinite guest's instruction limit. `vision-sanitize` checks the
+same controls and 30 real guest inputs under ASan/UBSan, plus full host accuracy.
+Both targets are included in release preparation.
 
-The dataset and learned numerical assets retain **CC BY 4.0** terms and full
+The data and learned numerical assets retain **CC BY 4.0** terms and full
 attribution in [VISION-NOTICE.md](../resources/vision/VISION-NOTICE.md), bundled
-in the app's **License and Credits** window. Code remains GPL-2.0-or-later.
-This lab is an independent addition to Viktor Lofgren's original Tunguska.
+in **License and Credits**. Code remains GPL-2.0-or-later. This lab is an independent
+addition to Viktor Lofgren's original Tunguska.

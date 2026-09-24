@@ -22,13 +22,16 @@ Changes in this independent Tunguska fork, 2026-09-24, Vinny Lingham:
   Pixel values, labels and record order were retained without changes.
 - Two 64 → 54 → 10 neural networks were trained using the official training
   file only: 3,323 fitting records and 500 checkpoint-validation records.
-  No test records were used in training or checkpoint selection.
+  Fitting examples include synthetic shifts, rotations, scale and stroke
+  variations. Validation uses clean and jittered views of the same 500 records.
+  No test records were used in training, checkpoint or uncertainty selection.
 - One network uses ternary weights and integer activations; the other uses
-  float32 parameters. Neither model is supplied or endorsed by UCI.
+  float32 parameters. An 8-bit weight-only baseline is derived from the float32
+  network. None of these models is supplied or endorsed by UCI.
 - The 3,996 ternary weights are encoded as five balanced trits per byte.
 
 The dataset-derived numerical parameters in model.h, vision-weights.bin,
-vision-model.json and the converted vision-digits.bin are provided under
+vision-int8-weights.bin, vision-model.json and the converted vision-digits.bin are provided under
 CC BY 4.0 with the above attribution. Their generation and inference code,
 native interface and tests are GPL-2.0-or-later, as marked in those files.
 

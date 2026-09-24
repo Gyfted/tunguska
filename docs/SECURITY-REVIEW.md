@@ -92,3 +92,29 @@ reported no diagnostics. Native UI verification covered drawing, a completed
 100-sample benchmark, single-instruction guest debugging, memory navigation,
 benchmark pause/cancel, and a successfully parsed partial JSON export through
 the sandboxed Save panel. These are focused checks, not exhaustive GUI coverage.
+
+## Vision Lab 0.9 follow-up
+
+Drawing preparation validates all 1,024 ink values for finiteness and range before
+bounded resampling; the model paths validate all 64 pixels. Regression checks
+include NaN, infinity, out-of-range ink, blank/dense/tiny input, translation
+normalization, native sparse/reference agreement, uncertainty ties/boundaries,
+and reset after debugging. The optimized guest uses ordinary existing instructions;
+there is no JIT or additional entitlement. All 1,797 historical test inputs match
+the dense reference exactly, and 30 additionally match the preserved 3CC guest.
+ASan/UBSan cover the new controls and selected real guest inputs.
+
+The optional generator reads a fixed-size packed model. Training still reads
+only the pinned UCI archive. Native baselines and the mistake browser add no
+external loading, networking or persistence. Reports now distinguish native and
+guest execution, raw/prepared pixels, raw predictions and abstentions. Obvious
+input rejection and a validation-selected score threshold are usability/model
+quality measures, not a general detector for unknown or adversarial inputs.
+
+The 0.9 native UI checks cover blank rejection, an off-center drawn digit with
+normalization on/off, uncertain output, mistake selection/filtering, guest stepping
+from Fast mode, complete 1,797-input guest/native benchmarks, native pause/resume, and
+sandboxed JSON exports. Exported aggregates, all 1,797 records and drawing
+preparation fields were independently checked. Targeted Clang analysis of the
+vision engine and native lab reported no diagnostics. These checks leave the
+existing emulator/compiler and independent-review limitations unchanged.

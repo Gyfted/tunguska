@@ -47,17 +47,23 @@ The memory inspector shows decimal, balanced nonary, and all six trits. Enter a 
 
 ## Ternary Vision Lab
 
-Open **Ternary Vision Lab** from the sidebar. Draw a digit or browse 1,797 held-out
-examples, then run a 64 → 54 → 10 neural network on the actual guest CPU. Inspect
-ternary weight maps and live activations, step through the compiled 3CC program,
-and export a benchmark report with timings and a confusion matrix.
+Open **Ternary Vision Lab** from the sidebar. Draw a digit or browse 1,797 historical
+test examples. Drawings automatically center and resize; blank inputs are rejected
+and close calls say **Not sure**. Run the same ternary network on the guest CPU
+or directly in **Fast on Mac** mode. Inspect neurons, debug the guest, explore a
+mistake browser with pixel-erasure sensitivity, and export detailed JSON reports.
 
-The ternary network gets **95.21%** held-out accuracy; the separately trained
-float32 baseline gets **95.94%**. Its 3,996 weights occupy **800 packed bytes**,
-versus 15,984 bytes for float32 weights (biases add 256 bytes each). The app makes
-no native speed advantage claim: emulation is slower. All inference is offline.
-See [the lab guide](docs/VISION-LAB.md) for controls, the memory map, training
-recipe, licensing and comparison limits.
+On the existing benchmark, raw ternary accuracy is **96.10%** (previously 95.21%);
+float32 and weight-only 8-bit baselines each reach **97.38%**. With uncertainty
+handling, ternary answers 96.83% of inputs with 97.82% accuracy among those answers.
+The 3,996 ternary weights occupy **800 packed bytes**, versus 15,984 float32 bytes
+or 3,996 8-bit bytes (biases add 256 bytes each; 8-bit adds 8 bytes of scales).
+
+Generated guest code uses about **42× fewer instructions** than the preserved
+3CC reference for the same model. Executable/working memory is additional to
+weight payloads; this does not establish a ternary hardware advantage. Everything
+runs offline. See [the lab guide](docs/VISION-LAB.md) for controls, reproducible
+training, licensing, and the limits of this historical benchmark.
 
 ## Build a program
 
@@ -104,14 +110,16 @@ Compiler integration tests execute arithmetic, mixed-size function calls, recurs
 
 Vision tests run all 1,797 held-out digits on the actual guest, requiring exact
 hidden activation and score parity with an independent integer reference. They
-also verify full-corpus float32 accuracy, model/data hashes, malformed inputs,
+also verify native ternary parity, float32/8-bit accuracy, 30 independent 3CC
+reference runs, drawing preparation, uncertainty, model/data hashes, malformed inputs,
 breakpoints, cancellation, failure rejection and instruction limits. A subset
 runs under ASan/UBSan.
 
 The Mac UI was also exercised directly: boot, typed `HELP`, pause, single step, reset, vector rendering, and mouse input in the 729-color drawing program.
 
-The Vision Lab was exercised with a drawn digit, completed 100-sample benchmark,
-guest stepping and memory navigation, pause/cancel and a sandboxed JSON export.
+The Vision Lab was exercised with blank and off-center drawings, normalization
+on/off, uncertainty and mistake browsing, complete 1,797-input guest/native benchmarks,
+guest stepping, pause/resume and validated sandboxed JSON exports.
 
 The debugger was exercised in the native UI: pause on opening, breakpoint stops and re-entry, one-instruction stepping, address validation, boundary navigation, row breakpoint toggles, and breakpoint-list selection/removal.
 
