@@ -16,7 +16,7 @@ python3 scripts/release.py prepare
 ```
 
 This exports `HEAD` to a clean source directory, builds an arm64/x86_64 universal
-app, runs core/sanitizer/security/compiler/sandbox/release-gate tests, checks the actual
+app, runs core/sanitizer/security/compiler/vision/sandbox/release-gate tests, checks the actual
 signature/entitlements and architecture slices, and packages the app. Use
 `--ref <tag-or-commit>` for a different committed source or `--archs arm64` for
 a native-only candidate. Existing candidate directories are never overwritten.
@@ -105,7 +105,7 @@ Before publishing a binary release:
    compatible licensing. Preserve their original copyright and license notices.
 2. Add dated notices to modified original files. Keep AUTHORS, NOTICE.md and
    source provenance accurate; distinguish original work from fork changes.
-3. Run `make test sanitize security-check compiler-check compiler-sanitize sandbox-check verify-app release-check` and build the app from a clean checkout.
+3. Run `make test sanitize security-check compiler-check compiler-sanitize vision-check vision-sanitize sandbox-check verify-app release-check` and build the app from a clean checkout.
    Record the commit, architecture, compiler and macOS versions used.
 4. Tag the exact source commit used to build the binary. Publish a complete
    corresponding source archive from that tag, including all required source,
@@ -113,7 +113,7 @@ Before publishing a binary release:
    Any dependencies needed beyond system components must be available under
    their applicable terms. Do not rely on an unrelated or moving main branch.
 5. Provide the binary and matching source download together on the same release
-   page. Include LICENSE, AUTHORS and NOTICE.md with the app/distribution, and
+   page. Include LICENSE, AUTHORS, NOTICE.md and VISION-NOTICE.md with the app/distribution, and
    make the GPL and warranty information accessible in the app.
 6. Check signing, sandboxing and notarization requirements separately. They do
    not replace GPL compliance. Update the documented security limitations.

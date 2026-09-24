@@ -1,6 +1,6 @@
 # Tunguska for Mac
 
-A native Mac revival of [Viktor Lofgren’s Tunguska](https://tunguska.sourceforge.net/): a computer whose digits are **−1, 0, +1**. This first working port retains the original processor, assembler, 3CC compiler, and operating systems, with a new AppKit interface and a C++17 build.
+A native Mac revival of [Viktor Lofgren’s Tunguska](https://tunguska.sourceforge.net/): a computer whose digits are **−1, 0, +1**. The port retains the original processor, assembler, 3CC compiler, and operating systems, with a new AppKit interface and a C++17 build.
 
 **Original creator:** [Viktor Lofgren](https://github.com/vlofgren). **This fork's maintainer:** [Vinny Lingham](https://github.com/Gyfted).
 
@@ -26,6 +26,7 @@ Click the display and type `HELP`, then Return. Commands are uppercase. The side
 | Run / Pause, ⌘P | Start or stop the processor |
 | Step, ⌘. | Execute one instruction, leaving the machine paused |
 | Debugger, ⌘D | Pause and open disassembly, breakpoints, registers and memory |
+| Ternary Vision Lab, ⌘L | Draw digits, run ternary neural inference, inspect neurons and benchmark |
 | Reset, ⌘R | Reload the selected memory image |
 | Open Image, ⌘O | Boot a complete `.ternobj` memory image |
 | ⌘B | Return to the bundled original operating system |
@@ -43,6 +44,20 @@ The app requests only App Sandbox and user-selected file read/write access. Ther
 Open **Debugger** (⌘D) to pause execution. Inspect instructions and registers, use **Step** to execute one instruction, or **Continue** to run. Double-click an instruction to toggle its breakpoint, or enter an address and choose **Toggle Breakpoint at Address**. Continue passes the breakpoint you just hit once, so loops stop again on the next visit. Breakpoints also catch interrupt handlers before their first instruction.
 
 The memory inspector shows decimal, balanced nonary, and all six trits. Enter a decimal address such as `198697`, or a nonary address such as `333:D04`, then **Go**. **Follow PC** follows execution in the disassembly while the memory view stays at your chosen address. Reset or loading another image clears breakpoints. See [the debugger guide](docs/DEBUGGING.md) for a walkthrough and limitations.
+
+## Ternary Vision Lab
+
+Open **Ternary Vision Lab** from the sidebar. Draw a digit or browse 1,797 held-out
+examples, then run a 64 → 54 → 10 neural network on the actual guest CPU. Inspect
+ternary weight maps and live activations, step through the compiled 3CC program,
+and export a benchmark report with timings and a confusion matrix.
+
+The ternary network gets **95.21%** held-out accuracy; the separately trained
+float32 baseline gets **95.94%**. Its 3,996 weights occupy **800 packed bytes**,
+versus 15,984 bytes for float32 weights (biases add 256 bytes each). The app makes
+no native speed advantage claim: emulation is slower. All inference is offline.
+See [the lab guide](docs/VISION-LAB.md) for controls, the memory map, training
+recipe, licensing and comparison limits.
 
 ## Build a program
 
@@ -78,6 +93,7 @@ make sanitize
 make security-check
 make sandbox-check verify-app release-check
 make compiler-check compiler-sanitize
+make vision-check vision-sanitize
 ```
 
 Tests cover every pair of tryte values for addition and multiplication, all 531,441 word conversions, 2,125,764 ADD/CMP instruction cases, memory boundaries, bounded interrupts, image roundtrips and rejection of malformed images, original OS boot and keyboard commands, pause/step/reset, and the original text/vector/raster demos. `sanitize` runs the same suite with AddressSanitizer and UndefinedBehaviorSanitizer.
@@ -86,7 +102,16 @@ Debugger tests additionally roundtrip every memory address, decode all 729 instr
 
 Compiler integration tests execute arithmetic, mixed-size function calls, recursion, array parameters, nested-scope loop control, arrays, structs, tritwise and three-valued logic, and string fixtures. They reject malformed inputs while preserving existing output. The compiler suite also runs under ASan/UBSan, boots the original 3CC OS and checks `HELP` and the new greeting example. See [compiler validation](docs/COMPILER.md#validation).
 
+Vision tests run all 1,797 held-out digits on the actual guest, requiring exact
+hidden activation and score parity with an independent integer reference. They
+also verify full-corpus float32 accuracy, model/data hashes, malformed inputs,
+breakpoints, cancellation, failure rejection and instruction limits. A subset
+runs under ASan/UBSan.
+
 The Mac UI was also exercised directly: boot, typed `HELP`, pause, single step, reset, vector rendering, and mouse input in the 729-color drawing program.
+
+The Vision Lab was exercised with a drawn digit, completed 100-sample benchmark,
+guest stepping and memory navigation, pause/cancel and a sandboxed JSON export.
 
 The debugger was exercised in the native UI: pause on opening, breakpoint stops and re-entry, one-instruction stepping, address validation, boundary navigation, row breakpoint toggles, and breakpoint-list selection/removal.
 
@@ -102,6 +127,7 @@ Developer ID signing and Apple notarization require Apple Developer Program memb
 
 - `src/core/` — adapted original CPU, balanced ternary math, memory, interrupts, disk and coprocessor.
 - `src/runtime.*` — window-independent execution, input, and display snapshots.
+- `src/vision.*` and `resources/vision/` — offline ternary vision engine, trained assets and guest.
 - `src/debugger.*` — read-only disassembly, address validation and number formatting.
 - `src/macos/` — native AppKit window, keyboard/mouse input, graphics and file dialogs.
 - `src/3cc/` — adapted original 3CC compiler, built as C++17.
@@ -118,6 +144,6 @@ See [provenance and port notes](docs/PORTING.md) for the changes to the original
 
 ## License
 
-The Tunguska software and this derivative port are distributed under GNU GPL version 2 or later (`GPL-2.0-or-later`), as specified in the original source headers. Original emulator, assembler, operating system, assets, and documentation by **Viktor Lofgren**. Existing copyright and warranty notices are preserved. Third-party build-support files retain their own notices and terms. See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
+The Tunguska software and this derivative port are distributed under GNU GPL version 2 or later (`GPL-2.0-or-later`), as specified in the original source headers. Original emulator, assembler, operating system, assets, and documentation by **Viktor Lofgren**. Existing copyright and warranty notices are preserved. The Vision Lab dataset and learned numerical assets use CC BY 4.0 with separate [attribution](resources/vision/VISION-NOTICE.md). Third-party build-support files retain their own notices and terms. See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
 
 This software is provided without warranty, including implied warranties of merchantability or fitness for a particular purpose. You may redistribute and modify it under the applicable GPL terms. Future binary releases must include matching complete source and build scripts; see [the release procedure](docs/RELEASING.md).

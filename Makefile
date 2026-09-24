@@ -75,20 +75,26 @@ build/boot.ternobj: build/tg_assembler $(wildcard resources/memory_image_asm/*.a
 build/runtime.o: src/runtime.cc src/runtime.h Makefile | build
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -MMD -MP -c $< -o $@
 
+build/vision.ternobj: resources/vision/inference.3c build/3cc build/tg_assembler scripts/compile_3cc.py
+	python3 scripts/compile_3cc.py $< -o $@
+
+build/vision.o: src/vision.cc src/vision.h resources/vision/model.h Makefile | build
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -MMD -MP -c $< -o $@
+
 build/debugger.o: src/debugger.cc src/debugger.h Makefile | build
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -MMD -MP -c $< -o $@
 
 build/tunguska-cli: src/cli.cc build/runtime.o $(OBJECTS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc $^ $(LDLIBS) -o $@
 
-build/Tunguska: src/macos/main.mm src/macos/DebuggerWindow.mm src/macos/DebuggerWindow.h src/macos/FileAccess.mm src/macos/FileAccess.h build/runtime.o build/debugger.o $(OBJECTS)
+build/Tunguska: src/macos/main.mm src/macos/VisionLab.mm src/macos/VisionLab.h build/vision.o src/macos/DebuggerWindow.mm src/macos/DebuggerWindow.h src/macos/FileAccess.mm src/macos/FileAccess.h build/runtime.o build/debugger.o $(OBJECTS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $(filter-out %.h,$^) $(LDLIBS) -framework Cocoa -o $@
 
-app: build/Tunguska build/boot.ternobj build/boot-3cc.ternobj
+app: build/Tunguska build/boot.ternobj build/boot-3cc.ternobj build/vision.ternobj
 	mkdir -p build/Tunguska.app/Contents/MacOS build/Tunguska.app/Contents/Resources
 	cp build/Tunguska build/Tunguska.app/Contents/MacOS/Tunguska.new
 	mv -f build/Tunguska.app/Contents/MacOS/Tunguska.new build/Tunguska.app/Contents/MacOS/Tunguska
-	cp build/boot.ternobj build/boot-3cc.ternobj LICENSE AUTHORS NOTICE.md build/Tunguska.app/Contents/Resources/
+	cp build/boot.ternobj build/boot-3cc.ternobj build/vision.ternobj resources/vision/vision-digits.bin resources/vision/vision-model.json resources/vision/vision-weights.bin resources/vision/VISION-NOTICE.md LICENSE AUTHORS NOTICE.md build/Tunguska.app/Contents/Resources/
 	cp src/macos/Info.plist build/Tunguska.app/Contents/Info.plist
 	codesign --force --sign - --options runtime --entitlements src/macos/Tunguska.entitlements build/Tunguska.app
 
@@ -132,3 +138,19 @@ run: app
 	open build/Tunguska.app
 
 -include $(wildcard build/*.d)
+
+.PHONY: vision-check vision-sanitize
+build/vision-tests: tests/vision_tests.cc build/vision.o build/runtime.o $(OBJECTS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc $^ $(LDLIBS) -o $@
+
+vision-check: build/vision-tests build/vision.ternobj
+	python3 tests/vision_assets.py
+	build/vision-tests build/vision.ternobj resources/vision/vision-digits.bin > build/vision-tests.log 2>&1 || { tail -30 build/vision-tests.log; exit 1; }
+	@tail -2 build/vision-tests.log
+
+build/vision-tests-sanitized: tests/vision_tests.cc src/vision.cc src/vision.h resources/vision/model.h src/runtime.cc src/runtime.h $(wildcard src/core/*.cc src/core/*.h) Makefile | build
+	$(CXX) $(CPPFLAGS) -Isrc -std=c++17 -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer tests/vision_tests.cc src/vision.cc src/runtime.cc $(addprefix src/core/,$(addsuffix .cc,$(CORE))) $(LDLIBS) -o $@
+
+vision-sanitize: build/vision-tests-sanitized build/vision.ternobj
+	UBSAN_OPTIONS=halt_on_error=1 build/vision-tests-sanitized build/vision.ternobj resources/vision/vision-digits.bin --quick > build/vision-sanitized.log 2>&1 || { tail -30 build/vision-sanitized.log; exit 1; }
+	@tail -2 build/vision-sanitized.log

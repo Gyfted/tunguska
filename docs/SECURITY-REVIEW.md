@@ -65,3 +65,30 @@ selected guest programs do not establish exhaustive correctness of the language,
 guest OS or ISA. See [the compiler guide](COMPILER.md).
 
 A targeted Clang analyzer pass on the adapted compiler still reported allocation-lifetime and possible null-object paths in the historical expression/initializer graph. Null inputs to array conversion now produce errors, but the remaining reports are not all proven unreachable. This compiler has not received a clean static-analysis or independent-security sign-off.
+
+## Vision Lab checks added on September 24, 2026
+
+The lab uses only bundled, fixed-size numerical parameters and data, with no
+networking, model downloads, native-code loading or added entitlements. Dataset
+loading checks the exact length/header, count, pixel ranges and labels before
+accepting it. Invalid inputs cannot replace a completed session. Guest inference
+is bounded at ten million instructions and its full result is rejected if any
+activation or score differs from the independently computed integer reference.
+Cancel, pause, breakpoint, restart, reference-failure and infinite-loop paths are
+regression-tested; ASan/UBSan run boundary, random and selected real inputs.
+
+The native canvas only supplies values 0…16. Reports are bounded by the 1,797
+bundled test records and written atomically through a coordinated user-selected
+URL. User drawings leave the app only if the user exports a report. No telemetry
+or persistent training history is collected. Training is an optional standalone
+NumPy script using a pinned official archive, not a runtime app capability.
+
+This targeted work does not change the remaining emulator/compiler limitations
+or constitute an independent security audit. The lab shares the existing UI
+process; the guest instruction/time budgets are cooperative limits.
+
+A targeted Clang analyzer pass on `src/vision.cc` and `src/macos/VisionLab.mm`
+reported no diagnostics. Native UI verification covered drawing, a completed
+100-sample benchmark, single-instruction guest debugging, memory navigation,
+benchmark pause/cancel, and a successfully parsed partial JSON export through
+the sandboxed Save panel. These are focused checks, not exhaustive GUI coverage.

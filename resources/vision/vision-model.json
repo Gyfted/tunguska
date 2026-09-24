@@ -1,0 +1,27 @@
+{
+  "dataset": "UCI Optical Recognition of Handwritten Digits",
+  "doi": "10.24432/C50P49",
+  "license": "CC-BY-4.0",
+  "archive_sha256": "0d7b054fea010270e9b3f06411c654c5e59547732ad626381980baffe0a23fb0",
+  "seed": 729,
+  "numpy": "2.3.5",
+  "architecture": [
+    64,
+    54,
+    10
+  ],
+  "epochs": 180,
+  "fit_samples": 3323,
+  "validation_samples": 500,
+  "test_samples": 1797,
+  "checkpoint_selection": "lowest training-split validation cross entropy",
+  "ternary_validation_loss": 0.06832461055715834,
+  "float_validation_loss": 0.06636597653217698,
+  "ternary_correct": 1711,
+  "float32_correct": 1724,
+  "nonzero_weights": 2483,
+  "hidden_rule": "clamp(floor((dot(input, ternary_weights) + integer_bias) / 8), 0, 81)",
+  "output_rule": "dot(hidden, ternary_weights) + integer_bias; lowest index wins ties",
+  "model_sha256": "420b81fd5016e4ac639115ab8f6523cc44559103189d8886b266ae4bef67feb3",
+  "test_data_sha256": "d2d9e6935ec8851a131372d27e42fe7f822fa70974e3fbc95dcefa94b0a13e67"
+}

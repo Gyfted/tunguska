@@ -1,0 +1,40 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Ternary Vision Lab guest, Vinny Lingham's independent Mac fork, 2026-09-24.
+// All learned matrix arithmetic executes here on Tunguska's CPU.
+// Positive weights add, negative weights subtract, zero weights skip.
+// Memory protocol is documented in docs/VISION-LAB.md.
+asm("SEI", "JSR main", "idle: PAUSE", "JMP idle");
+void main() {
+    char* pixels = (char*)100010;
+    char* hidden = (char*)100100;
+    int* scores = (int*)100200;
+    char* weights = (char*)110000;
+    int* biases = (int*)114000;
+    int row = 0; int col = 0; int offset = 0; int sum = 0;
+    char weight = 0;
+    *(char*)100000 = 1;
+    for (row=0; row<54; row++) {
+        sum = biases[row];
+        for (col=0; col<64; col++) {
+            weight = weights[offset]; offset++;
+            if (weight > 0) sum += pixels[col];
+            if (weight < 0) sum -= pixels[col];
+        }
+        if (sum < 0) sum = 0;
+        sum = sum / 8;
+        if (sum > 81) sum = 81;
+        hidden[row] = sum;
+        *(char*)100001 = row+1;
+    }
+    for (row=0; row<10; row++) {
+        sum = biases[row+54];
+        for (col=0; col<54; col++) {
+            weight = weights[offset]; offset++;
+            if (weight > 0) sum += hidden[col];
+            if (weight < 0) sum -= hidden[col];
+        }
+        scores[row] = sum;
+        *(char*)100001 = row+55;
+    }
+    *(char*)100000 = 2;
+}

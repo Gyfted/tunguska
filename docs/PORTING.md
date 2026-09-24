@@ -111,3 +111,12 @@ compound OR/XOR, high-word tritwise operands, logical operand normalization, and
 stack restoration when continuing from a nested scope. The original code generator
 and ternary language remain recognizable; this is not an ISO C frontend replacement.
 See [COMPILER.md](COMPILER.md) for commands and explicit limitations.
+
+## Ternary Vision Lab addition — 2026-09-24
+
+Version 0.8 adds an independent AppKit vision laboratory and a new 3CC guest
+network, with packed ternary parameters and a separately trained float32 baseline.
+Original CPU, compiler and archive provenance is unchanged. New code is GPL-2.0-or-later;
+UCI digit data and learned numerical assets carry separate CC BY 4.0 attribution.
+The app builds offline and gains no entitlements or external ML dependencies.
+See [VISION-LAB.md](VISION-LAB.md) for training provenance, validation and limits.

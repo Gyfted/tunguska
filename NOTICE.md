@@ -37,3 +37,12 @@ restriction is imposed by this notice.
 This software is distributed without warranty, including implied warranties
 of merchantability or fitness for a particular purpose, to the extent permitted
 by law. Refer to the full license for details and recipients' rights.
+
+## Vision Lab data and numerical models
+
+The UCI Optical Recognition of Handwritten Digits dataset by E. Alpaydin and
+C. Kaynak (1998), DOI https://doi.org/10.24432/C50P49, and this fork's dataset-derived
+numerical model assets are separately licensed under CC BY 4.0. Converted test
+records, training changes and full attribution are documented in
+resources/vision/VISION-NOTICE.md, also bundled as VISION-NOTICE.md.
+These data terms do not replace the GPL terms of the software or imply endorsement.

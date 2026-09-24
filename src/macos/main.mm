@@ -2,6 +2,7 @@
 // Independent Mac frontend, 2026-09-24. Original project: Viktor Lofgren.
 #import <Cocoa/Cocoa.h>
 #import "DebuggerWindow.h"
+#import "VisionLab.h"
 #import "FileAccess.h"
 #include "runtime.h"
 #include <deque>
@@ -142,6 +143,7 @@ static NSButton *Button(NSString *title, id target, SEL action) {
 @property(strong) NSWindow *window;
 @property(strong) NSWindow *licenseWindow;
 @property(strong) DebuggerWindow *debugger;
+@property(strong) VisionLab *visionLab;
 @property(strong) ScreenView *screen;
 @property(strong) NSButton *runButton;
 @property(strong) NSTextField *registers;
@@ -208,6 +210,7 @@ static NSButton *Button(NSString *title, id target, SEL action) {
         button.toolTip = [NSString stringWithFormat:@"Boot the bundled system and run %@", entry[1]];
         [sidebar addArrangedSubview:button];
     }
+    [sidebar addArrangedSubview:Button(@"Ternary Vision Lab", self, @selector(showVisionLab:))];
     [sidebar addArrangedSubview:Label(@"IMAGE", 10, RGB(0x789686), YES)];
     self.imageLabel = Label(@"Original Tunguska OS", 12, RGB(0xA1B6A9));
     self.imageLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
@@ -280,6 +283,7 @@ static NSButton *Button(NSString *title, id target, SEL action) {
     [machine.submenu addItemWithTitle:@"Boot Original System" action:@selector(bootOriginal:) keyEquivalent:@"b"];
     [machine.submenu addItemWithTitle:@"Boot Experimental 3CC System" action:@selector(boot3CC:) keyEquivalent:@""];
     [machine.submenu addItemWithTitle:@"Send Break" action:@selector(sendBreak:) keyEquivalent:@""];
+    [machine.submenu addItemWithTitle:@"Ternary Vision Lab" action:@selector(showVisionLab:) keyEquivalent:@"l"];
     NSApp.mainMenu = bar;
 }
 - (void)loadImage:(NSURL *)url {
@@ -336,6 +340,12 @@ static NSButton *Button(NSString *title, id target, SEL action) {
     self.registers.stringValue = [NSString stringWithFormat:@"PC   %03X:%03X\nA    %4d   X  %4d\nY    %4d   S  %4d\nP    %4d   CL %4d", c.PCH.nonaryhex(), c.PCL.nonaryhex(), c.A.to_int(), c.X.to_int(), c.Y.to_int(), c.S.to_int(), c.P.to_int(), c.CL.to_int()];
     self.metrics.stringValue = [NSString stringWithFormat:@"6 TRITS / TRYTE    ·    531,441 TRYTE MEMORY    ·    %.0f K INSTRUCTIONS/S    ·    %llu EXECUTED", rate/1000, (unsigned long long)_runtime->cycles()];
     [self.debugger refresh];
+}
+- (void)showVisionLab:(id)sender {
+    if (_runtime) _runtime->setRunning(false);
+    if (!self.visionLab) self.visionLab = [[VisionLab alloc] init];
+    [self.visionLab showWindow:sender];
+    [self updateStats];
 }
 - (void)showDebugger:(id)sender {
     if (!_runtime) return;
@@ -394,12 +404,12 @@ static NSButton *Button(NSString *title, id target, SEL action) {
 }
 - (void)ejectDisk:(id)sender { if (_runtime) { _runtime->eject(); self.diskLabel.stringValue = @"No disk mounted"; } }
 - (void)about:(id)sender {
-    [NSApp orderFrontStandardAboutPanelWithOptions:@{NSAboutPanelOptionApplicationName:@"Tunguska for Mac", NSAboutPanelOptionApplicationVersion:@"0.6 · Mac preview", NSAboutPanelOptionCredits:[[NSAttributedString alloc] initWithString:@"Originally created by Viktor Lofgren.\nOriginal emulator and operating system © 2007–2008 Viktor Lofgren.\nIndependent Mac fork maintained by Vinny Lingham.\nNo upstream endorsement is claimed.\n\nYou may modify and redistribute this software under GNU GPL v2 or later. Provided without warranty.\nChoose Tunguska → License and Credits for full terms and attribution."]}];
+    [NSApp orderFrontStandardAboutPanelWithOptions:@{NSAboutPanelOptionApplicationName:@"Tunguska for Mac", NSAboutPanelOptionApplicationVersion:[NSString stringWithFormat:@"%@ · Mac preview", [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"]], NSAboutPanelOptionCredits:[[NSAttributedString alloc] initWithString:@"Originally created by Viktor Lofgren.\nOriginal emulator and operating system © 2007–2008 Viktor Lofgren.\nIndependent Mac fork maintained by Vinny Lingham.\nNo upstream endorsement is claimed.\n\nYou may modify and redistribute this software under GNU GPL v2 or later. Provided without warranty.\nChoose Tunguska → License and Credits for full terms and attribution."]}];
 }
 - (void)showLicense:(id)sender {
     if (!self.licenseWindow) {
         NSMutableString *contents = [NSMutableString string];
-        for (NSString *name in @[@"AUTHORS", @"NOTICE.md", @"LICENSE"]) {
+        for (NSString *name in @[@"AUTHORS", @"NOTICE.md", @"VISION-NOTICE.md", @"LICENSE"]) {
             NSString *path = [NSBundle.mainBundle.resourcePath stringByAppendingPathComponent:name];
             NSString *text = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil];
             if (!text) { [self showError:@"A bundled license or attribution file is missing. Please rebuild the app."]; return; }
