@@ -25,6 +25,7 @@ Click the display and type `HELP`, then Return. Commands are uppercase. The side
 | --- | --- |
 | Run / Pause, ⌘P | Start or stop the processor |
 | Step, ⌘. | Execute one instruction, leaving the machine paused |
+| Debugger, ⌘D | Pause and open disassembly, breakpoints, registers and memory |
 | Reset, ⌘R | Reload the selected memory image |
 | Open Image, ⌘O | Boot a complete `.ternobj` memory image |
 | ⌘B | Return to the bundled original operating system |
@@ -33,7 +34,13 @@ Click the display and type `HELP`, then Return. Commands are uppercase. The side
 | Mount Disk, ⌘M | Attach a virtual floppy image |
 | Save Disk As, ⌘S | Export the current virtual floppy |
 
-The guest’s `LOAD` command no longer opens host paths. Use **Mount Disk**, then `FDSTAT` or `RUN` in the guest. Guest disk writes stay in memory; use **Save Disk As** to persist them. Disk images and memory images contain the same complete 531,441-tryte storage format, but are loaded into different devices.
+The guest’s `LOAD` command no longer opens host paths. Use **Mount Disk**, then `FDSTAT` or `RUN` in the guest. Guest disk writes stay in memory; use **Save Disk As** to persist them. Saves now write and flush a temporary file in the destination folder before atomically replacing the chosen file; a failed write preserves the previous file. Symbolic-link destinations are rejected. Disk images and memory images contain the same complete 531,441-tryte storage format, but are loaded into different devices.
+
+## Inspect and debug
+
+Open **Debugger** (⌘D) to pause execution. Inspect instructions and registers, use **Step** to execute one instruction, or **Continue** to run. Double-click an instruction to toggle its breakpoint, or enter an address and choose **Toggle Breakpoint at Address**. Continue passes the breakpoint you just hit once, so loops stop again on the next visit. Breakpoints also catch interrupt handlers before their first instruction.
+
+The memory inspector shows decimal, balanced nonary, and all six trits. Enter a decimal address such as `198697`, or a nonary address such as `333:D04`, then **Go**. **Follow PC** follows execution in the disassembly while the memory view stays at your chosen address. Reset or loading another image clears breakpoints. See [the debugger guide](docs/DEBUGGING.md) for a walkthrough and limitations.
 
 ## Build a program
 
@@ -59,7 +66,11 @@ make security-check
 
 Tests cover every pair of tryte values for addition and multiplication, all 531,441 word conversions, 2,125,764 ADD/CMP instruction cases, memory boundaries, bounded interrupts, image roundtrips and rejection of malformed images, original OS boot and keyboard commands, pause/step/reset, and the original text/vector/raster demos. `sanitize` runs the same suite with AddressSanitizer and UndefinedBehaviorSanitizer.
 
+Debugger tests additionally roundtrip every memory address, decode all 729 instruction encodings, check every addressing mode at the memory boundary, and verify breakpoint/continue/step behavior in loops and interrupt handlers. Save tests force a compressed-write failure using a child process's file-size limit, verify the original file is unchanged and temporary output removed, and check successful replacement, permissions, and symbolic-link rejection.
+
 The Mac UI was also exercised directly: boot, typed `HELP`, pause, single step, reset, vector rendering, and mouse input in the 729-color drawing program.
+
+The debugger was exercised in the native UI: pause on opening, breakpoint stops and re-entry, one-instruction stepping, address validation, boundary navigation, row breakpoint toggles, and breakpoint-list selection/removal.
 
 A [targeted security review](docs/SECURITY-REVIEW.md) added malformed-image, guest file-access, floating-point boundary and randomized instruction checks. It found and fixed three additional arithmetic issues. This preview is not yet OS-sandboxed or independently audited; use trusted images.
 
@@ -67,13 +78,14 @@ A [targeted security review](docs/SECURITY-REVIEW.md) added malformed-image, gue
 
 - `src/core/` — adapted original CPU, balanced ternary math, memory, interrupts, disk and coprocessor.
 - `src/runtime.*` — window-independent execution, input, and display snapshots.
+- `src/debugger.*` — read-only disassembly, address validation and number formatting.
 - `src/macos/` — native AppKit window, keyboard/mouse input, graphics and file dialogs.
 - `src/assembler/` — original two-pass assembler, built with Apple’s flex/bison.
 - `resources/memory_image_asm/` — original guest OS assembly.
 - `upstream/tunguska-0.5/` — untouched source release, including its manual and experimental 3CC compiler.
 - `upstream/github/` — unchanged files from the original GitHub repository, whose commit history remains the ancestry of this fork.
 
-This is a working port, not a complete rewrite. The next useful additions are a disassembler and memory inspector, breakpoint debugging, a modernized 3CC compiler, and a signed universal release. The old 3CC compiler is preserved but is not part of this build. The original guest software and instruction set have not been exhaustively validated beyond the tests above.
+This is a working port, not a complete rewrite. The next priorities are OS sandboxing and resource isolation, broader instruction-set tests, source labels in the debugger, a modernized 3CC compiler, and a signed universal release. The old 3CC compiler is preserved but is not part of this build. The original guest software and instruction set have not been exhaustively validated beyond the tests above.
 
 See [provenance and port notes](docs/PORTING.md) for the changes to the original implementation.
 

@@ -18,21 +18,41 @@ void Runtime::reset(const std::string& image) {
     cpu_ = std::move(next);
     coprocessor_ = agdp();
     cycles_ = 0;
+    cyclePrepared_ = false;
+    clearBreakpoints();
     frame_ = Frame();
     capture(true);
 }
-void Runtime::cycle() {
-    if (cpu_->CL.to_int() == 0) cpu_->queue_interrupt(new clock_interrupt());
-    disk_->heartbeat();
-    coprocessor_.heartbeat(*cpu_);
-    cpu_->instruction();
+bool Runtime::cycle(bool checkBreakpoints) {
+    if (!cyclePrepared_) {
+        if (cpu_->CL.to_int() == 0) cpu_->queue_interrupt(new clock_interrupt());
+        disk_->heartbeat();
+        coprocessor_.heartbeat(*cpu_);
+        cyclePrepared_ = true;
+    }
+    if (checkBreakpoints && !breakpoints_.empty()) {
+        const bool executed = cpu_->instruction([this](int address) {
+            const auto skip = skipBreakpoint_;
+            skipBreakpoint_.reset();
+            if (skip == address || !breakpoints_.count(address)) return false;
+            setRunning(false);
+            stoppedAt_ = address;
+            return true;
+        });
+        if (!executed) return false;
+    } else {
+        skipBreakpoint_.reset();
+        cpu_->instruction();
+    }
+    cyclePrepared_ = false;
     ++cycles_;
+    return true;
 }
 uint64_t Runtime::run(uint64_t instructions, double maxMilliseconds) {
     const auto start = std::chrono::steady_clock::now();
     uint64_t count = 0;
     for (; count < instructions && running(); ++count) {
-        cycle();
+        if (!cycle()) break;
         // Service display handshakes even when running without a window.
         if ((count & 1023) == 1023) {
             capture();
@@ -46,11 +66,28 @@ uint64_t Runtime::run(uint64_t instructions, double maxMilliseconds) {
     capture();
     return count;
 }
-void Runtime::step() { setRunning(false); cycle(); capture(); }
+void Runtime::step() {
+    setRunning(false);
+    stoppedAt_.reset(); skipBreakpoint_.reset();
+    cycle(false);
+    setRunning(false);
+    capture();
+}
 void Runtime::setRunning(bool run) {
     if (run == running()) return;
-    if (run) cpu_->set_state(new machine::running_state());
+    if (run) {
+        skipBreakpoint_ = stoppedAt_;
+        stoppedAt_.reset();
+        cpu_->set_state(new machine::running_state());
+    }
     else cpu_->set_state(new machine::paused_state());
+}
+void Runtime::toggleBreakpoint(int address) {
+    if (address < -MEMSIZ/2 || address > MEMSIZ/2) throw std::out_of_range("Breakpoint address outside memory");
+    if (!breakpoints_.erase(address)) breakpoints_.insert(address);
+}
+void Runtime::clearBreakpoints() {
+    breakpoints_.clear(); stoppedAt_.reset(); skipBreakpoint_.reset();
 }
 void Runtime::key(char ascii) {
     if (ascii == '\r') ascii = '\n';

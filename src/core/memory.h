@@ -20,6 +20,7 @@
 /* Mac fork modification notice — 2026-09-24
  * Maintained by Vinny Lingham (https://github.com/Gyfted).
  * Use modern exceptions, a memory-size constant, and noncopyable ownership.
+ * Provide const memory access for read-only debugger inspection.
  * Original authorship and GPL-2.0-or-later terms are retained.
  * See docs/PORTING.md for provenance and details.
  */
@@ -41,6 +42,7 @@ class memory {
 		memory(const memory&) = delete;
 		memory& operator=(const memory&) = delete;
 		tryte& memref(int pos);
+		const tryte& memref(int pos) const;
 		tryte& memref(const tryte& low, const tryte& high);
 		tryte& memrefi(int low, int high);
 

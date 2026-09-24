@@ -20,6 +20,7 @@
 /* Mac fork modification notice — 2026-09-24
  * Maintained by Vinny Lingham (https://github.com/Gyfted).
  * Separate the core from SDL; bound and validate interrupt requests.
+ * Add an instruction-boundary debugger hook after interrupt dispatch.
  * Original authorship and GPL-2.0-or-later terms are retained.
  * See docs/PORTING.md for provenance and details.
  */
@@ -29,6 +30,7 @@
 #include <queue>
 #include <cstdio>
 #include <cstring>
+#include <functional>
 #include "interrupt.h"
 #include "memory.h"
 #ifndef machine_h
@@ -65,7 +67,8 @@ class machine : public memory {
 		enum { C = 0, G = 1, I = 2, B = 3, V = 4, PR = 5 };
 
 		/* Process single instruction */
-		void instruction();
+		// Return false when the debugger stops before executing an instruction.
+		bool instruction(const std::function<bool(int)>& pauseBefore = {});
 
 		/* Quick OP-code-assembly. Takes addressing mode and operation and
 		 * bakes it together into a complete opcode */
@@ -262,6 +265,7 @@ class machine : public memory {
 
 		std::queue<interrupt*>* interrupt_queue;
 		bool clock_pending = false;
+		bool instruction_pending = false;
 
 		state* current_state;
 };

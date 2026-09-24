@@ -7,6 +7,13 @@
 #include <iostream>
 #include <stdexcept>
 #include <zlib.h>
+#include <sys/resource.h>
+#include <sys/wait.h>
+#include <sys/stat.h>
+#include <signal.h>
+#include <unistd.h>
+
+void debuggerTests(const char* image);
 
 static void check(bool ok, const char *message) {
     if (!ok) throw std::runtime_error(message);
@@ -75,6 +82,38 @@ int main(int argc, char **argv) {
         cpu.save(image.c_str());
         memory restored; restored.load(image.c_str());
         check(restored.memref(-265720).to_int() == -364 && restored.memref(265720).to_int() == 364, "image save/load");
+        auto bytes = [](const std::string& path) {
+            std::ifstream file(path, std::ios::binary);
+            return std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+        };
+        const std::string original = bytes(image);
+        // Force an actual write failure after opening the temporary compressed
+        // file, without filling the user's disk or changing the parent limit.
+        const pid_t child = fork();
+        check(child >= 0, "start save-failure test");
+        if (child == 0) {
+            signal(SIGXFSZ, SIG_IGN);
+            struct rlimit limit = {128, 128};
+            if (setrlimit(RLIMIT_FSIZE, &limit) != 0) _exit(2);
+            try { cpu.save(image.c_str()); } catch (const std::runtime_error&) { _exit(0); }
+            _exit(1);
+        }
+        int status = 0;
+        check(waitpid(child, &status, 0) == child && WIFEXITED(status) && WEXITSTATUS(status) == 0, "compressed save reports write failure");
+        check(bytes(image) == original, "failed save preserves original file byte for byte");
+        check(std::distance(std::filesystem::directory_iterator(directory), std::filesystem::directory_iterator{}) == 1, "failed save removes temporary output");
+        check(chmod(image.c_str(), 0640) == 0, "set output permissions");
+        restored.memref(0) = 123; restored.save(image.c_str());
+        memory replaced; replaced.load(image.c_str());
+        check(replaced.memref(0).to_int() == 123, "atomic replacement publishes new image");
+        struct stat metadata;
+        check(stat(image.c_str(), &metadata) == 0 && (metadata.st_mode & 0777) == 0640, "replacement preserves permissions");
+        const auto link = std::string(directory) + "/link.ternobj";
+        check(symlink(image.c_str(), link.c_str()) == 0, "create test symlink");
+        bool linkRejected = false;
+        const auto replacedBytes = bytes(image);
+        try { cpu.save(link.c_str()); } catch (const std::runtime_error&) { linkRejected = true; }
+        check(linkRejected && std::filesystem::is_symlink(link) && bytes(image) == replacedBytes, "save refuses symbolic links without modifying target");
         auto rejects = [&](const std::string& path) {
             bool rejected = false;
             try { restored.load(path.c_str()); } catch (const std::runtime_error&) { rejected = true; }
@@ -88,7 +127,9 @@ int main(int argc, char **argv) {
         gzFile zipped = gzopen(image.c_str(), "wb"); gzwrite(zipped, invalid.data(), unsigned(invalid.size())); gzclose(zipped);
         rejects(image);
         std::filesystem::remove_all(directory);
-        std::cout << "PASS memory image roundtrip and malformed image rejection\n";
+        std::cout << "PASS atomic image saves, forced write failure, and malformed image rejection\n";
+
+        debuggerTests(argv[1]);
 
         tunguska::Runtime runtime(argv[1]);
         runtime.run(500000); runtime.capture(true);

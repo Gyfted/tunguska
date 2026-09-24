@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Independent Mac frontend, 2026-09-24. Original project: Viktor Lofgren.
 #import <Cocoa/Cocoa.h>
+#import "DebuggerWindow.h"
 #include "runtime.h"
 #include <deque>
 
@@ -138,6 +139,7 @@ static NSButton *Button(NSString *title, id target, SEL action) {
 }
 @property(strong) NSWindow *window;
 @property(strong) NSWindow *licenseWindow;
+@property(strong) DebuggerWindow *debugger;
 @property(strong) ScreenView *screen;
 @property(strong) NSButton *runButton;
 @property(strong) NSTextField *registers;
@@ -179,6 +181,7 @@ static NSButton *Button(NSString *title, id target, SEL action) {
     [header addArrangedSubview:self.runButton];
     [header addArrangedSubview:Button(@"Step", self, @selector(step:))];
     [header addArrangedSubview:Button(@"Reset", self, @selector(reset:))];
+    [header addArrangedSubview:Button(@"Debugger", self, @selector(showDebugger:))];
     [header addArrangedSubview:Button(@"Open Image…", self, @selector(openImage:))];
     [spacer setContentHuggingPriority:1 forOrientation:NSLayoutConstraintOrientationHorizontal];
 
@@ -270,6 +273,7 @@ static NSButton *Button(NSString *title, id target, SEL action) {
     machine.submenu = [[NSMenu alloc] initWithTitle:@"Machine"];
     [machine.submenu addItemWithTitle:@"Run / Pause" action:@selector(toggleRun:) keyEquivalent:@"p"];
     [machine.submenu addItemWithTitle:@"Step Instruction" action:@selector(step:) keyEquivalent:@"."];
+    [machine.submenu addItemWithTitle:@"Show Debugger" action:@selector(showDebugger:) keyEquivalent:@"d"];
     [machine.submenu addItemWithTitle:@"Reset Image" action:@selector(reset:) keyEquivalent:@"r"];
     [machine.submenu addItemWithTitle:@"Boot Original System" action:@selector(bootOriginal:) keyEquivalent:@"b"];
     [machine.submenu addItemWithTitle:@"Send Break" action:@selector(sendBreak:) keyEquivalent:@""];
@@ -282,6 +286,8 @@ static NSButton *Button(NSString *title, id target, SEL action) {
         else _runtime = std::make_unique<tunguska::Runtime>(path.fileSystemRepresentation);
         self.imagePath = path;
         self.screen.runtime = _runtime.get();
+        self.debugger.runtime = _runtime.get();
+        [self.debugger imageDidChange];
         _input.clear(); _nextInputCycle = 0; _lastCycles = 0; _revision = 0;
         _lastStats = NSDate.timeIntervalSinceReferenceDate;
         self.imageLabel.stringValue = [path.lastPathComponent isEqual:@"boot.ternobj"] ? @"Original Tunguska OS" : path.lastPathComponent;
@@ -318,11 +324,25 @@ static NSButton *Button(NSString *title, id target, SEL action) {
     const double elapsed = MAX(0.001, NSDate.timeIntervalSinceReferenceDate - _lastStats);
     const double rate = (_runtime->cycles() - _lastCycles)/elapsed;
     _lastCycles = _runtime->cycles(); _lastStats = NSDate.timeIntervalSinceReferenceDate;
-    self.status.stringValue = _runtime->running() ? @"●  Running" : @"◉  Paused";
+    self.status.stringValue = _runtime->stoppedAtBreakpoint() ? @"◉  Breakpoint" : _runtime->running() ? @"●  Running" : @"◉  Paused";
     self.runButton.title = _runtime->running() ? @"Pause" : @"Run";
     self.mode.stringValue = _runtime->frame().mode == 0 ? @"54 × 27 · Text mode" : _runtime->frame().mode == 1 ? @"Vector graphics" : _runtime->frame().auxiliary == 1 ? @"324 × 243 · 3 colors" : @"324 × 243 · 729 colors";
     self.registers.stringValue = [NSString stringWithFormat:@"PC   %03X:%03X\nA    %4d   X  %4d\nY    %4d   S  %4d\nP    %4d   CL %4d", c.PCH.nonaryhex(), c.PCL.nonaryhex(), c.A.to_int(), c.X.to_int(), c.Y.to_int(), c.S.to_int(), c.P.to_int(), c.CL.to_int()];
     self.metrics.stringValue = [NSString stringWithFormat:@"6 TRITS / TRYTE    ·    531,441 TRYTE MEMORY    ·    %.0f K INSTRUCTIONS/S    ·    %llu EXECUTED", rate/1000, (unsigned long long)_runtime->cycles()];
+    [self.debugger refresh];
+}
+- (void)showDebugger:(id)sender {
+    if (!_runtime) return;
+    _runtime->setRunning(false);
+    if (!self.debugger) {
+        self.debugger = [[DebuggerWindow alloc] init];
+        self.debugger.runtime = _runtime.get();
+        __weak AppDelegate *weakSelf = self;
+        self.debugger.didChange = ^{ [weakSelf updateStats]; weakSelf.screen.needsDisplay = YES; };
+        [self.debugger imageDidChange];
+    }
+    [self.debugger showWindow:sender];
+    [self updateStats];
 }
 - (void)toggleRun:(id)sender { if (_runtime) { _runtime->setRunning(!_runtime->running()); [self updateStats]; [self.window makeFirstResponder:self.screen]; } }
 - (void)step:(id)sender { if (_runtime) { _runtime->step(); [self updateStats]; self.screen.needsDisplay = YES; } }

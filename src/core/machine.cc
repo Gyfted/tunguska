@@ -20,6 +20,7 @@
 /* Mac fork modification notice — 2026-09-24
  * Maintained by Vinny Lingham (https://github.com/Gyfted).
  * Repair arithmetic/bounds issues, clean up state, and bound interrupts.
+ * Expose a debugger stop after interrupt dispatch and before instruction fetch.
  * Original authorship and GPL-2.0-or-later terms are retained.
  * See docs/PORTING.md for provenance and details.
  */
@@ -156,11 +157,14 @@ void machine::run_interrupt() {
 }
 
 /* Process a single instruction */
-void machine::instruction() {
+bool machine::instruction(const std::function<bool(int)>& pauseBefore) {
 	/* Check for interrupt */
-	run_interrupt();
+	if (!instruction_pending) run_interrupt();
+	instruction_pending = true;
 
 	int ip = tryte::word_to_int(PCH, PCL);
+	if (pauseBefore && pauseBefore(ip)) return false;
+	instruction_pending = false;
 	tryte instruction = memref(ip);
 	tryte highbits = instruction >> 4;
 	instruction = (instruction << 2) >> 2;
@@ -340,7 +344,7 @@ void machine::instruction() {
 	}
 
 	current_state->heartbeat();
-
+	return true;
 }
 
 void machine::pflag(const tryte& t) {

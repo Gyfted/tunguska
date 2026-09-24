@@ -52,6 +52,22 @@ The text renderer uses scalable native monospace fonts. It maps the original dis
 - Prevented accidental copying of memory owners; released processor states, queued interrupts, and mounted disk filenames on destruction/reset.
 - Coalesced pending clock interrupts and bounded the input interrupt queue at 4,096 entries.
 - Made guest disk loading a host-UI operation and disk persistence explicit through Save Disk As. Invalid replacement disk images preserve the previous mount. Guest changes are lost on reset/eject unless saved.
+- Made image saves atomic: compress into a uniquely created sibling file, verify gzip completion, flush it, then rename it over the destination. Existing Unix permission bits are retained; new files start private. Partial temporary files are removed on reported failures. Symbolic-link and non-regular destinations are rejected. This does not claim power-loss durability for directory metadata or preservation of extended attributes/ACLs.
+
+## Debugger additions — 2026-09-24
+
+The new AppKit debugger provides read-only disassembly and memory inspection,
+register/flag display, and host-managed execution breakpoints. The active core's
+instruction API now accepts an optional stop predicate and reports whether an
+instruction actually executed. The predicate runs after interrupt dispatch,
+before fetching/executing the instruction. A pending-instruction flag and a
+runtime device-preparation flag keep resume/step from repeating interrupt or
+peripheral work. Breakpoints do not modify guest instructions.
+
+Disassembly and validated address/number conversions live in `src/debugger.*`;
+the window lives in `src/macos/DebuggerWindow.*`. These additions are independent
+fork work under the existing GPL-2.0-or-later terms. The archived upstream copies
+remain unchanged. See [the debugger guide](DEBUGGING.md) for behavior and limits.
 
 ## Validation environment
 

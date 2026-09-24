@@ -7,6 +7,7 @@ This is a focused local review of the native Mac preview, not a certification or
 - Image loading limits decompression output to the exact image length plus one byte; truncated, oversized, out-of-range and corrupt images are rejected before memory changes.
 - Test inputs include an image expanding to 16 MiB, truncated gzip data, a bad gzip CRC, and missing/invalid files.
 - Guest disk LOAD does not resolve host filenames. Guest SYNC does not write the original mounted host file. Tests verify both behaviors. Saving requires a native file-panel action.
+- Image saves use a uniquely created temporary sibling file, check compression completion and `fsync`, and atomically rename only after success. A forced write-failure test verifies the old file remains byte-for-byte intact and partial temporary output is removed. Saves reject symbolic-link and other non-regular destinations. Existing Unix permission bits are retained; new images are created with mode 0600.
 - Interrupt queues are bounded and clock requests coalesced. The native paste queue is capped at 8,192 ASCII characters.
 - Source review found no network API, subprocess launch, shell execution, or dynamically loaded plugin functionality in the app.
 - The original release's SHA-256 was checked against its published SourceForge metadata. Only system libraries are linked into the Mac app.
@@ -33,6 +34,6 @@ The existing suite covers normal guest boot and demos as well as arithmetic. Sec
 - The native GUI, assembler/parser, bundled old 3CC compiler, and all instruction semantics have not undergone comprehensive fuzzing or independent review. In particular, the assembler supports host-file includes and should be used only on trusted source. It is not a security boundary.
 - Guest execution is in the UI process. Expensive guest block operations or excessive debug output can still affect responsiveness and resource consumption. The batch time budget is not a hard per-instruction resource limit.
 - No current CVE/database audit of Apple’s system zlib or OS libraries was performed; their security updates come from macOS.
-- Not all file-panel/error paths or host filesystem races have been audited. Saves are not yet atomic replacement operations.
+- Not all file-panel/error paths or host filesystem races have been audited. Atomic saves protect against reported write failures but do not guarantee directory-metadata durability across power loss, preserve ACLs/extended attributes, or coordinate with other applications concurrently changing the destination. A process crash may leave a temporary sibling file.
 
 Use the bundled programs and trusted images for this preview. OS sandboxing, stronger process/resource isolation, sustained fuzzing and review of the assembler should precede a release intended to run arbitrary third-party programs.

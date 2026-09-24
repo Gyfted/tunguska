@@ -20,6 +20,7 @@
 /* Mac fork modification notice — 2026-09-24
  * Maintained by Vinny Lingham (https://github.com/Gyfted).
  * Validate images transactionally and encode little-endian storage explicitly.
+ * Save through a temporary sibling file and atomic replacement; add const reads.
  * Original authorship and GPL-2.0-or-later terms are retained.
  * See docs/PORTING.md for provenance and details.
  */
@@ -30,6 +31,10 @@
 #include <cstdint>
 #include <memory>
 #include <vector>
+#include <filesystem>
+#include <cerrno>
+#include <sys/stat.h>
+#include <unistd.h>
 
 void memory::load(const char* filename) {
     if (!filename) throw std::runtime_error("No image path supplied");
@@ -52,21 +57,50 @@ void memory::load(const char* filename) {
 }
 
 void memory::save(const char* filename) {
-    if (!filename) throw std::runtime_error("No output path supplied");
-    std::unique_ptr<gzFile_s, decltype(&gzclose)> file(gzopen(filename, "wb9"), gzclose);
-    if (!file) throw std::runtime_error("Cannot create memory image");
+    if (!filename || !*filename) throw std::runtime_error("No output path supplied");
     std::vector<unsigned char> bytes(MEMSIZ * 2);
     for (int i = 0; i < MEMSIZ; ++i) {
         const auto value = static_cast<uint16_t>(mem[i].to_int());
         bytes[2*i] = value & 255;
         bytes[2*i+1] = value >> 8;
     }
+    struct stat previous;
+    const bool exists = lstat(filename, &previous) == 0;
+    if (exists && !S_ISREG(previous.st_mode))
+        throw std::runtime_error("Choose a regular output file, not a directory or symbolic link");
+    if (!exists && errno != ENOENT) throw std::runtime_error("Cannot inspect output path");
+
+    // The sibling stays on the same filesystem, so rename is atomic. RAII also
+    // removes partial output after compression, disk-full, or rename failures.
+    struct Temporary {
+        std::string path;
+        int fd = -1;
+        ~Temporary() { if (fd >= 0) { close(fd); if (!path.empty()) unlink(path.c_str()); } }
+    } temporary;
+    auto parent = std::filesystem::path(filename).parent_path();
+    if (parent.empty()) parent = ".";
+    temporary.path = (parent / ".tunguska-save-XXXXXX").string();
+    temporary.fd = mkstemp(temporary.path.data());
+    if (temporary.fd < 0) throw std::runtime_error("Cannot create temporary image in the output folder");
+    if (exists && fchmod(temporary.fd, previous.st_mode & 0777) != 0)
+        throw std::runtime_error("Cannot preserve output file permissions");
+    const int compressedFD = dup(temporary.fd);
+    if (compressedFD < 0) throw std::runtime_error("Cannot open compressed output");
+    std::unique_ptr<gzFile_s, decltype(&gzclose)> file(gzdopen(compressedFD, "wb9"), gzclose);
+    if (!file) { close(compressedFD); throw std::runtime_error("Cannot create compressed output"); }
     if (gzwrite(file.get(), bytes.data(), static_cast<unsigned>(bytes.size())) != int(bytes.size()))
         throw std::runtime_error("Unable to write complete memory image");
     if (gzclose(file.release()) != Z_OK) throw std::runtime_error("Unable to finish memory image");
+    if (fsync(temporary.fd) != 0) throw std::runtime_error("Unable to flush memory image");
+    if (rename(temporary.path.c_str(), filename) != 0)
+        throw std::runtime_error("Unable to replace memory image; the original file was preserved");
+    temporary.path.clear();
 }
 
 tryte& memory::memref(int pos) {
+    return const_cast<tryte&>(static_cast<const memory&>(*this).memref(pos));
+}
+const tryte& memory::memref(int pos) const {
     const int64_t shifted = int64_t(pos) + MEMSIZ/2;
     const auto index = (shifted % MEMSIZ + MEMSIZ) % MEMSIZ;
     return mem[index];

@@ -8,6 +8,8 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <optional>
+#include <set>
 
 namespace tunguska {
 constexpr int columns = 54, rows = 27, width = 324, height = 243;
@@ -37,17 +39,26 @@ public:
     void eject();
     std::string text() const;
     machine& cpu() { return *cpu_; }
+    const machine& cpu() const { return *cpu_; }
+    int programCounter() const { return tryte::word_to_int(cpu_->PCH, cpu_->PCL); }
+    void toggleBreakpoint(int address);
+    void clearBreakpoints();
+    const std::set<int>& breakpoints() const { return breakpoints_; }
+    std::optional<int> stoppedAtBreakpoint() const { return stoppedAt_; }
     const Frame& frame() const { return frame_; }
     uint64_t cycles() const { return cycles_; }
     bool running() const { return cpu_->get_state()->is_running(); }
     void setRunning(bool running);
     static std::array<uint8_t, 3> color(int value);
 private:
-    void cycle();
+    bool cycle(bool checkBreakpoints = true);
     std::unique_ptr<machine> cpu_;
     std::unique_ptr<disk> disk_;
     agdp coprocessor_;
     Frame frame_;
     uint64_t cycles_ = 0;
+    bool cyclePrepared_ = false;
+    std::set<int> breakpoints_;
+    std::optional<int> stoppedAt_, skipBreakpoint_;
 };
 }

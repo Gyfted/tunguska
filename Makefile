@@ -8,6 +8,7 @@ CXXFLAGS := -std=c++17 -mmacosx-version-min=12.0 -O2 -g -Wall -Wextra -Wno-unuse
 LDLIBS := -lz
 CORE := trit tryte memory machine interrupt agdp disk
 OBJECTS := $(addprefix build/,$(addsuffix .o,$(CORE)))
+TEST_SOURCES := tests/core_tests.cc tests/debugger_tests.cc
 
 .PHONY: all app test sanitize security-check run
 all: app build/tg_assembler build/tunguska-cli
@@ -36,11 +37,14 @@ build/boot.ternobj: build/tg_assembler $(wildcard resources/memory_image_asm/*.a
 build/runtime.o: src/runtime.cc src/runtime.h Makefile | build
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -MMD -MP -c $< -o $@
 
+build/debugger.o: src/debugger.cc src/debugger.h Makefile | build
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -MMD -MP -c $< -o $@
+
 build/tunguska-cli: src/cli.cc build/runtime.o $(OBJECTS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc $^ $(LDLIBS) -o $@
 
-build/Tunguska: src/macos/main.mm build/runtime.o $(OBJECTS)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $^ $(LDLIBS) -framework Cocoa -o $@
+build/Tunguska: src/macos/main.mm src/macos/DebuggerWindow.mm src/macos/DebuggerWindow.h build/runtime.o build/debugger.o $(OBJECTS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $(filter-out %.h,$^) $(LDLIBS) -framework Cocoa -o $@
 
 app: build/Tunguska build/boot.ternobj
 	mkdir -p build/Tunguska.app/Contents/MacOS build/Tunguska.app/Contents/Resources
@@ -50,14 +54,14 @@ app: build/Tunguska build/boot.ternobj
 	cp src/macos/Info.plist build/Tunguska.app/Contents/Info.plist
 	codesign --force --sign - build/Tunguska.app
 
-build/core-tests: tests/core_tests.cc build/runtime.o $(OBJECTS)
+build/core-tests: $(TEST_SOURCES) build/runtime.o build/debugger.o $(OBJECTS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc $^ $(LDLIBS) -o $@
 
 test: build/core-tests build/boot.ternobj
 	build/core-tests build/boot.ternobj
 
-build/core-tests-sanitized: tests/core_tests.cc src/runtime.cc src/runtime.h $(wildcard src/core/*.cc src/core/*.h) Makefile | build
-	$(CXX) $(CPPFLAGS) -Isrc -std=c++17 -mmacosx-version-min=12.0 -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer tests/core_tests.cc src/runtime.cc $(addprefix src/core/,$(addsuffix .cc,$(CORE))) $(LDLIBS) -o $@
+build/core-tests-sanitized: $(TEST_SOURCES) src/runtime.cc src/runtime.h src/debugger.cc src/debugger.h $(wildcard src/core/*.cc src/core/*.h) Makefile | build
+	$(CXX) $(CPPFLAGS) -Isrc -std=c++17 -mmacosx-version-min=12.0 -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $(TEST_SOURCES) src/runtime.cc src/debugger.cc $(addprefix src/core/,$(addsuffix .cc,$(CORE))) $(LDLIBS) -o $@
 
 sanitize: build/core-tests-sanitized build/boot.ternobj
 	UBSAN_OPTIONS=halt_on_error=1 build/core-tests-sanitized build/boot.ternobj
