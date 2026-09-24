@@ -278,6 +278,7 @@ static NSButton *Button(NSString *title, id target, SEL action) {
     [machine.submenu addItemWithTitle:@"Show Debugger" action:@selector(showDebugger:) keyEquivalent:@"d"];
     [machine.submenu addItemWithTitle:@"Reset Image" action:@selector(reset:) keyEquivalent:@"r"];
     [machine.submenu addItemWithTitle:@"Boot Original System" action:@selector(bootOriginal:) keyEquivalent:@"b"];
+    [machine.submenu addItemWithTitle:@"Boot Experimental 3CC System" action:@selector(boot3CC:) keyEquivalent:@""];
     [machine.submenu addItemWithTitle:@"Send Break" action:@selector(sendBreak:) keyEquivalent:@""];
     NSApp.mainMenu = bar;
 }
@@ -295,6 +296,7 @@ static NSButton *Button(NSString *title, id target, SEL action) {
         _input.clear(); _nextInputCycle = 0; _lastCycles = 0; _revision = 0;
         _lastStats = NSDate.timeIntervalSinceReferenceDate;
         self.imageLabel.stringValue = [url.lastPathComponent isEqual:@"boot.ternobj"] ? @"Original Tunguska OS" : url.lastPathComponent;
+        if ([url.lastPathComponent isEqual:@"boot-3cc.ternobj"]) self.imageLabel.stringValue = @"Experimental 3CC System";
         self.diskLabel.stringValue = @"No disk mounted";
         [self.window makeFirstResponder:self.screen];
         [self updateStats];
@@ -352,6 +354,7 @@ static NSButton *Button(NSString *title, id target, SEL action) {
 - (void)step:(id)sender { if (_runtime) { _runtime->step(); [self updateStats]; self.screen.needsDisplay = YES; } }
 - (void)reset:(id)sender { if (self.imageURL) [self loadImage:self.imageURL]; }
 - (void)bootOriginal:(id)sender { [self loadImage:[NSBundle.mainBundle URLForResource:@"boot" withExtension:@"ternobj"]]; }
+- (void)boot3CC:(id)sender { [self loadImage:[NSBundle.mainBundle URLForResource:@"boot-3cc" withExtension:@"ternobj"]]; }
 - (void)sendBreak:(id)sender { if (_runtime) _runtime->breakKey(); }
 - (void)example:(NSButton *)sender {
     [self bootOriginal:sender];

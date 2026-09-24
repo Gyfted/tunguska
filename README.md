@@ -1,6 +1,6 @@
 # Tunguska for Mac
 
-A native Mac revival of [Viktor Lofgren’s Tunguska](https://tunguska.sourceforge.net/): a computer whose digits are **−1, 0, +1**. This first working port retains the original processor, assembler, and operating system, with a new AppKit interface and a C++17 build.
+A native Mac revival of [Viktor Lofgren’s Tunguska](https://tunguska.sourceforge.net/): a computer whose digits are **−1, 0, +1**. This first working port retains the original processor, assembler, 3CC compiler, and operating systems, with a new AppKit interface and a C++17 build.
 
 **Original creator:** [Viktor Lofgren](https://github.com/vlofgren). **This fork's maintainer:** [Vinny Lingham](https://github.com/Gyfted).
 
@@ -36,7 +36,7 @@ Click the display and type `HELP`, then Return. Commands are uppercase. The side
 
 The guest’s `LOAD` command no longer opens host paths. Use **Mount Disk**, then `FDSTAT` or `RUN` in the guest. Guest disk writes stay in memory; use **Save Disk As** to persist them. The app uses macOS-coordinated replacement files for atomic saves without requesting access to the enclosing folder. Symbolic-link destinations are rejected. Disk images and memory images contain the same complete 531,441-tryte storage format, but are loaded into different devices.
 
-The app requests only App Sandbox and user-selected file read/write access. There are no network, camera, microphone, broad-folder, JIT or hardened-runtime-exception entitlements. Open and Save dialogs authorize individual files; the current memory image's URL is retained so Reset can reopen it. No persistent file bookmarks are stored. The developer CLI and assembler are separate, unsandboxed tools and are not included in the distributed app.
+The app requests only App Sandbox and user-selected file read/write access. There are no network, camera, microphone, broad-folder, JIT or hardened-runtime-exception entitlements. Open and Save dialogs authorize individual files; the current memory image's URL is retained so Reset can reopen it. No persistent file bookmarks are stored. The developer CLI, assembler and 3CC compiler are separate, unsandboxed tools and are not included in the distributed app.
 
 ## Inspect and debug
 
@@ -49,6 +49,18 @@ The memory inspector shows decimal, balanced nonary, and all six trits. Enter a 
 ```sh
 build/tg_assembler -o build/hello.ternobj examples/hello.asm
 ```
+
+To compile a 3CC program instead:
+
+```sh
+python3 scripts/compile_3cc.py examples/hello.3c -o build/hello-3cc.ternobj
+```
+
+The new driver preprocesses guest headers, compiles and assembles an image, and
+preserves existing output if a build stage fails. Choose **Machine → Boot
+Experimental 3CC System** to run the original alternative OS, rebuilt with the
+modern compiler; type `HELP` for its commands. See [the compiler guide](docs/COMPILER.md)
+for language differences, examples and limitations.
 
 Open `build/hello.ternobj` in the app. To rebuild the original OS, edit the assembly under `resources/memory_image_asm/` and run `make`.
 
@@ -65,11 +77,14 @@ make test
 make sanitize
 make security-check
 make sandbox-check verify-app release-check
+make compiler-check compiler-sanitize
 ```
 
 Tests cover every pair of tryte values for addition and multiplication, all 531,441 word conversions, 2,125,764 ADD/CMP instruction cases, memory boundaries, bounded interrupts, image roundtrips and rejection of malformed images, original OS boot and keyboard commands, pause/step/reset, and the original text/vector/raster demos. `sanitize` runs the same suite with AddressSanitizer and UndefinedBehaviorSanitizer.
 
 Debugger tests additionally roundtrip every memory address, decode all 729 instruction encodings, check every addressing mode at the memory boundary, and verify breakpoint/continue/step behavior in loops and interrupt handlers. Save tests force a compressed-write failure using a child process's file-size limit, verify the original file is unchanged and temporary output removed, and check successful replacement, permissions, and symbolic-link rejection.
+
+Compiler integration tests execute arithmetic, mixed-size function calls, recursion, array parameters, nested-scope loop control, arrays, structs, tritwise and three-valued logic, and string fixtures. They reject malformed inputs while preserving existing output. The compiler suite also runs under ASan/UBSan, boots the original 3CC OS and checks `HELP` and the new greeting example. See [compiler validation](docs/COMPILER.md#validation).
 
 The Mac UI was also exercised directly: boot, typed `HELP`, pause, single step, reset, vector rendering, and mouse input in the 729-color drawing program.
 
@@ -89,12 +104,15 @@ Developer ID signing and Apple notarization require Apple Developer Program memb
 - `src/runtime.*` — window-independent execution, input, and display snapshots.
 - `src/debugger.*` — read-only disassembly, address validation and number formatting.
 - `src/macos/` — native AppKit window, keyboard/mouse input, graphics and file dialogs.
+- `src/3cc/` — adapted original 3CC compiler, built as C++17.
+- `scripts/compile_3cc.py` — preprocessing, compilation and assembly driver.
+- `resources/memory_image_3cc/` — original alternative 3CC guest OS and headers.
 - `src/assembler/` — original two-pass assembler, built with Apple’s flex/bison.
 - `resources/memory_image_asm/` — original guest OS assembly.
 - `upstream/tunguska-0.5/` — untouched source release, including its manual and experimental 3CC compiler.
 - `upstream/github/` — unchanged files from the original GitHub repository, whose commit history remains the ancestry of this fork.
 
-This is a working port, not a complete rewrite. The next priorities are stronger resource/process isolation, broader instruction-set tests, source labels in the debugger, a modernized 3CC compiler, and completing Apple Developer ID signing/notarization. The old 3CC compiler is preserved but is not part of this build. The original guest software and instruction set have not been exhaustively validated beyond the tests above.
+The debugger, memory inspector, breakpoints and modernized 3CC build are implemented. Next priorities are stronger process isolation, broader instruction-set and compiler conformance tests, source labels in the debugger, and Apple Developer ID signing/notarization once account access is restored. Universal local previews remain ad-hoc signed. The original guest software, experimental 3CC language and instruction set have not been exhaustively validated beyond the tests above.
 
 See [provenance and port notes](docs/PORTING.md) for the changes to the original implementation.
 

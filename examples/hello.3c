@@ -1,0 +1,16 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Independent Mac fork example, 2026-09-24.
+ * Build: python3 scripts/compile_3cc.py examples/hello.3c -o build/hello-3cc.ternobj
+ */
+asm("SEI", "JSR main", "idle: JMP idle");
+
+void main() {
+    char* screen = (char*)0nDDBDDD;
+    char* message = "HELLO FROM 3CC!";
+    int i = 0;
+    while (message[i] != 0) {
+        screen[i] = message[i];
+        i++;
+    }
+    *(char*)0nDDDDDB = 1;
+}

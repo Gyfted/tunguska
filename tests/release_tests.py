@@ -56,7 +56,7 @@ class ReleaseGates(unittest.TestCase):
                 app = Path(directory)
                 resources = app / "Contents" / "Resources"
                 resources.mkdir(parents=True)
-                for name in ("LICENSE", "AUTHORS", "NOTICE.md", "boot.ternobj"):
+                for name in ("LICENSE", "AUTHORS", "NOTICE.md", "boot.ternobj", "boot-3cc.ternobj"):
                     (resources / name).write_bytes(b"fixture")
                 with patch.object(verify_app, "run", side_effect=tool):
                     return verify_app.verify(app, developer_id)

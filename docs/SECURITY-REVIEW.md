@@ -1,6 +1,6 @@
 # Targeted security review — September 24, 2026
 
-This is a focused local review of the native Mac preview, not a certification or an independent audit. The relevant attacker-controlled inputs are memory/floppy images, guest instructions and peripheral commands, and pasted keyboard input. The CLI assembler is a separate developer tool and is not loaded into the app.
+This is a focused local review of the native Mac preview, not a certification or an independent audit. The relevant attacker-controlled inputs are memory/floppy images, guest instructions and peripheral commands, and pasted keyboard input. The CLI assembler and 3CC compiler are separate developer tools and are not loaded into the app.
 
 ## Verified controls
 
@@ -26,7 +26,7 @@ The security regression suite additionally executes all 729 opcode/address-mode 
 ## Reproduce
 
 ```sh
-make test sanitize security-check
+make test sanitize security-check compiler-check compiler-sanitize
 make sandbox-check verify-app release-check
 ```
 
@@ -35,9 +35,33 @@ The existing suite covers normal guest boot and demos as well as arithmetic. Sec
 ## Remaining limitations
 
 - The `.app` now has App Sandbox and hardened runtime, but is still ad-hoc signed and not notarized. Developer ID signing and Apple's service require credentials unavailable on the initial build host. Notarization submission, ticket stapling and final Gatekeeper acceptance remain unverified until those credentials exist. The release tooling rejects unexpected entitlements and missing Developer ID signatures before submission.
-- The native GUI, assembler/parser, bundled old 3CC compiler, and all instruction semantics have not undergone comprehensive fuzzing or independent review. In particular, the assembler supports host-file includes and should be used only on trusted source. It is not a security boundary.
+- The native GUI, assembler/parser, modernized 3CC compiler, and all instruction semantics have not undergone comprehensive fuzzing or independent review. In particular, the assembler supports host-file includes and should be used only on trusted source. It is not a security boundary.
 - Guest execution is in the UI process. Expensive guest block operations or excessive debug output can still affect responsiveness and resource consumption. The batch time budget is not a hard per-instruction resource limit.
 - No current CVE/database audit of Apple’s system zlib or OS libraries was performed; their security updates come from macOS.
 - Not all file-panel/error paths or host filesystem races have been audited. Native saves coordinate with cooperating file presenters; they do not control processes that bypass coordination. Atomic replacement does not guarantee directory-metadata durability across power loss. A process crash may leave a temporary replacement file.
 
 Use the bundled programs and trusted images for this preview. App Sandbox limits host access but does not make the emulator memory-safe or impose hard guest CPU limits. Stronger process/resource isolation, sustained fuzzing and review of the assembler remain work for running arbitrary third-party programs.
+
+## Compiler checks added on September 24, 2026
+
+3CC now builds as a separate C++17 command. Focused hardening covers initialized
+state, non-truncating arm64 dimension handling, checked literal and constant
+arithmetic, bounded array/function-frame sizes, unknown tokens and unterminated
+comments/strings, long duplicate identifiers, bad argument counts and invalid field
+access. A sanitizer test exposed signed overflow in constant type selection; range
+comparisons replace the old squaring operation. Expression deletion now removes
+stale allocation-list entries. String data is emitted as numeric guest trytes.
+
+Both the backend and public driver stage output. Failed parsing/preprocessing
+preserves earlier output; the driver rejects symlink/device destinations and
+source/output aliases. `compiler-check` and `compiler-sanitize` run the same
+compile/assemble/guest-execution fixtures and malformed-input regressions.
+
+The historical AST/type graph still retains allocations until process exit; this
+is not a memory-leak-free compiler. The driver limits per-process CPU/wall time and
+file output, but has no hard memory cap and is not a filesystem sandbox. Guest
+source and assembler includes remain trusted inputs. Compiler tests, boot/HELP and
+selected guest programs do not establish exhaustive correctness of the language,
+guest OS or ISA. See [the compiler guide](COMPILER.md).
+
+A targeted Clang analyzer pass on the adapted compiler still reported allocation-lifetime and possible null-object paths in the historical expression/initializer graph. Null inputs to array conversion now produce errors, but the remaining reports are not all proven unreachable. This compiler has not received a clean static-analysis or independent-security sign-off.

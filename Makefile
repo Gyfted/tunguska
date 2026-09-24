@@ -12,7 +12,44 @@ OBJECTS := $(addprefix build/,$(addsuffix .o,$(CORE)))
 TEST_SOURCES := tests/core_tests.cc tests/debugger_tests.cc
 
 .PHONY: all app test sanitize security-check sandbox-check verify-app release-check run
-all: app build/tg_assembler build/tunguska-cli
+all: app build/tg_assembler build/tunguska-cli build/3cc
+
+TRICC_SOURCES := $(wildcard src/3cc/*.cc)
+TRICC_HEADERS := $(wildcard src/3cc/*.h)
+
+build/3cc-generated: | build
+	mkdir -p $@
+
+build/3cc-generated/parser.cc: src/3cc/parser.ypp | build/3cc-generated
+	bison --defines=build/3cc-generated/parser.h -o $@ $<
+
+build/3cc-generated/parser.h: build/3cc-generated/parser.cc
+	@test -f $@
+
+build/3cc-generated/scanner.cc: src/3cc/scanner.l build/3cc-generated/parser.h
+	flex -+ -o $@ $<
+
+build/3cc: $(TRICC_SOURCES) $(TRICC_HEADERS) build/3cc-generated/parser.cc build/3cc-generated/scanner.cc Makefile
+	$(CXX) -Isrc/3cc -Ibuild/3cc-generated -I$(DEVELOPER)/usr/include $(CXXFLAGS) $(filter %.cc,$^) -o $@
+
+build/3cc-sanitized: $(TRICC_SOURCES) $(TRICC_HEADERS) build/3cc-generated/parser.cc build/3cc-generated/scanner.cc Makefile
+	$(CXX) -Isrc/3cc -Ibuild/3cc-generated -I$(DEVELOPER)/usr/include -std=c++17 -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $(filter %.cc,$^) -o $@
+
+build/compiler-runner: tests/compiler_runner.cc build/runtime.o $(OBJECTS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc $^ $(LDLIBS) -o $@
+
+.PHONY: compiler-check compiler-sanitize guest-3cc
+compiler-check: build/3cc build/tg_assembler build/compiler-runner build/tunguska-cli
+	python3 tests/compiler_tests.py
+
+compiler-sanitize: build/3cc-sanitized build/tg_assembler build/compiler-runner build/tunguska-cli
+	UBSAN_OPTIONS=halt_on_error=1 python3 tests/compiler_tests.py --sanitized
+
+GUEST_3CC := $(addprefix resources/memory_image_3cc/,$(addsuffix .c,string stdio math main system graphics demos))
+build/boot-3cc.ternobj: $(GUEST_3CC) $(wildcard resources/memory_image_3cc/*.3h) build/3cc build/tg_assembler scripts/compile_3cc.py
+	python3 scripts/compile_3cc.py -O 0n400000 -o $@ $(GUEST_3CC)
+
+guest-3cc: build/boot-3cc.ternobj
 
 build:
 	mkdir -p build
@@ -47,11 +84,11 @@ build/tunguska-cli: src/cli.cc build/runtime.o $(OBJECTS)
 build/Tunguska: src/macos/main.mm src/macos/DebuggerWindow.mm src/macos/DebuggerWindow.h src/macos/FileAccess.mm src/macos/FileAccess.h build/runtime.o build/debugger.o $(OBJECTS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $(filter-out %.h,$^) $(LDLIBS) -framework Cocoa -o $@
 
-app: build/Tunguska build/boot.ternobj
+app: build/Tunguska build/boot.ternobj build/boot-3cc.ternobj
 	mkdir -p build/Tunguska.app/Contents/MacOS build/Tunguska.app/Contents/Resources
 	cp build/Tunguska build/Tunguska.app/Contents/MacOS/Tunguska.new
 	mv -f build/Tunguska.app/Contents/MacOS/Tunguska.new build/Tunguska.app/Contents/MacOS/Tunguska
-	cp build/boot.ternobj LICENSE AUTHORS NOTICE.md build/Tunguska.app/Contents/Resources/
+	cp build/boot.ternobj build/boot-3cc.ternobj LICENSE AUTHORS NOTICE.md build/Tunguska.app/Contents/Resources/
 	cp src/macos/Info.plist build/Tunguska.app/Contents/Info.plist
 	codesign --force --sign - --options runtime --entitlements src/macos/Tunguska.entitlements build/Tunguska.app
 

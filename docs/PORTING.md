@@ -93,4 +93,21 @@ remain unchanged. See [the debugger guide](DEBUGGING.md) for behavior and limits
 
 Apple Silicon (`arm64`), macOS 27.0, Apple Command Line Tools. Build uses C++17, AppKit and system zlib with flex/bison for assembler generation. Minimum deployment target is 12.0; there is no verified Intel or older-macOS release yet.
 
-`make test` exercises the processor and original guest system. `make sanitize` compiles the suite separately with AddressSanitizer and UndefinedBehaviorSanitizer and stops on undefined behavior. These tests establish a baseline, not full instruction-set conformance; the remaining instruction families and 3CC need their own coverage before deeper architectural rewrites.
+`make test` exercises the processor and original guest system. `make sanitize` compiles the suite separately with AddressSanitizer and UndefinedBehaviorSanitizer and stops on undefined behavior. These tests establish a baseline, not full instruction-set conformance; the remaining instruction families and full 3CC semantics still need broader coverage before deeper architectural rewrites. The added compiler integration/sanitizer suite is described below.
+
+## 3CC revival — 2026-09-24
+
+The active compiler in `src/3cc/` derives from the later archived GitHub version,
+not the 0.5 compiler. Original copyright headers are retained and modified copies
+carry dated notices. All original archives remain byte-for-byte unchanged.
+`resources/memory_image_3cc/` contains unchanged copies of the GitHub guest sources.
+The app bundles both the original assembly OS and the freshly compiled 3CC OS.
+
+Changes include C++17/arm64 portability, initialized compiler state, exceptions
+by value, checked literals/array sizes/constant arithmetic, staged output, proper
+comments and string encoding, and actionable diagnostics. Regression tests drove
+fixes for mixed-width call arguments, array arguments, constant remainder, swapped
+compound OR/XOR, high-word tritwise operands, logical operand normalization, and
+stack restoration when continuing from a nested scope. The original code generator
+and ternary language remain recognizable; this is not an ISO C frontend replacement.
+See [COMPILER.md](COMPILER.md) for commands and explicit limitations.
