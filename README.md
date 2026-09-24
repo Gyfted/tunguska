@@ -17,7 +17,7 @@ make -j4
 open build/Tunguska.app
 ```
 
-Requires Apple’s Xcode Command Line Tools (`xcode-select --install`). No Homebrew packages, SDL, or other downloads are required to build. The local build is native **arm64**, tested on Apple Silicon with macOS 27. The deployment target is macOS 12; older systems and Intel Macs have not been tested. The app is locally ad-hoc signed, not notarized for distribution. This repository publishes source; it does not yet offer an official binary release.
+Requires Apple’s Xcode Command Line Tools (`xcode-select --install`). No Homebrew packages, SDL, or other downloads are required to build. The local build is native **arm64**, tested on Apple Silicon with macOS 27. The deployment target is macOS 12; older systems and Intel Macs have not been runtime-tested. The release script also builds a universal app with arm64 and x86_64 slices. The app enables **App Sandbox and hardened runtime**, but is locally ad-hoc signed and not notarized for distribution. This repository publishes source; it does not yet offer an official binary release.
 
 Click the display and type `HELP`, then Return. Commands are uppercase. The sidebar also launches the original demos. A demo button boots a fresh bundled system before entering its command; Reset reloads the current image and clears the virtual disk.
 
@@ -34,7 +34,9 @@ Click the display and type `HELP`, then Return. Commands are uppercase. The side
 | Mount Disk, ⌘M | Attach a virtual floppy image |
 | Save Disk As, ⌘S | Export the current virtual floppy |
 
-The guest’s `LOAD` command no longer opens host paths. Use **Mount Disk**, then `FDSTAT` or `RUN` in the guest. Guest disk writes stay in memory; use **Save Disk As** to persist them. Saves now write and flush a temporary file in the destination folder before atomically replacing the chosen file; a failed write preserves the previous file. Symbolic-link destinations are rejected. Disk images and memory images contain the same complete 531,441-tryte storage format, but are loaded into different devices.
+The guest’s `LOAD` command no longer opens host paths. Use **Mount Disk**, then `FDSTAT` or `RUN` in the guest. Guest disk writes stay in memory; use **Save Disk As** to persist them. The app uses macOS-coordinated replacement files for atomic saves without requesting access to the enclosing folder. Symbolic-link destinations are rejected. Disk images and memory images contain the same complete 531,441-tryte storage format, but are loaded into different devices.
+
+The app requests only App Sandbox and user-selected file read/write access. There are no network, camera, microphone, broad-folder, JIT or hardened-runtime-exception entitlements. Open and Save dialogs authorize individual files; the current memory image's URL is retained so Reset can reopen it. No persistent file bookmarks are stored. The developer CLI and assembler are separate, unsandboxed tools and are not included in the distributed app.
 
 ## Inspect and debug
 
@@ -62,6 +64,7 @@ build/tunguska-cli build/boot.ternobj HELP
 make test
 make sanitize
 make security-check
+make sandbox-check verify-app release-check
 ```
 
 Tests cover every pair of tryte values for addition and multiplication, all 531,441 word conversions, 2,125,764 ADD/CMP instruction cases, memory boundaries, bounded interrupts, image roundtrips and rejection of malformed images, original OS boot and keyboard commands, pause/step/reset, and the original text/vector/raster demos. `sanitize` runs the same suite with AddressSanitizer and UndefinedBehaviorSanitizer.
@@ -72,7 +75,13 @@ The Mac UI was also exercised directly: boot, typed `HELP`, pause, single step, 
 
 The debugger was exercised in the native UI: pause on opening, breakpoint stops and re-entry, one-instruction stepping, address validation, boundary navigation, row breakpoint toggles, and breakpoint-list selection/removal.
 
-A [targeted security review](docs/SECURITY-REVIEW.md) added malformed-image, guest file-access, floating-point boundary and randomized instruction checks. It found and fixed three additional arithmetic issues. This preview is not yet OS-sandboxed or independently audited; use trusted images.
+A [targeted security review](docs/SECURITY-REVIEW.md) added malformed-image, guest file-access, floating-point boundary and randomized instruction checks. It found and fixed three additional arithmetic issues. The new signed sandbox test app verifies denied access to an unselected private file and denied outbound network access, plus successful boot and coordinated saves inside its container. Run `sandbox-check` from a normal macOS terminal; an enclosing sandbox may prevent macOS from creating the test app's container. Its disposable private-file fixture is removed afterward. This preview is not independently audited; use trusted images.
+
+## Prepare a Mac release
+
+From a clean, committed checkout, run `python3 scripts/release.py prepare`. It builds a universal app from an exported exact source commit, runs the test suites, and packages both a clearly marked local preview and the matching complete GPL source archive under `build/releases/`. It records architecture, compiler, checksums and source commit in a manifest.
+
+Developer ID signing and Apple notarization require Apple Developer Program membership, an installed signing identity and a Keychain credential profile. The separate `notarize` command checks those prerequisites and never treats an ad-hoc preview as an approved release. See [the release procedure](docs/RELEASING.md) for setup and publication steps.
 
 ## Layout and next work
 
@@ -85,7 +94,7 @@ A [targeted security review](docs/SECURITY-REVIEW.md) added malformed-image, gue
 - `upstream/tunguska-0.5/` — untouched source release, including its manual and experimental 3CC compiler.
 - `upstream/github/` — unchanged files from the original GitHub repository, whose commit history remains the ancestry of this fork.
 
-This is a working port, not a complete rewrite. The next priorities are OS sandboxing and resource isolation, broader instruction-set tests, source labels in the debugger, a modernized 3CC compiler, and a signed universal release. The old 3CC compiler is preserved but is not part of this build. The original guest software and instruction set have not been exhaustively validated beyond the tests above.
+This is a working port, not a complete rewrite. The next priorities are stronger resource/process isolation, broader instruction-set tests, source labels in the debugger, a modernized 3CC compiler, and completing Apple Developer ID signing/notarization. The old 3CC compiler is preserved but is not part of this build. The original guest software and instruction set have not been exhaustively validated beyond the tests above.
 
 See [provenance and port notes](docs/PORTING.md) for the changes to the original implementation.
 

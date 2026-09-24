@@ -4,13 +4,14 @@ CXX := clang++
 SDKROOT := $(shell xcrun --show-sdk-path)
 DEVELOPER := $(shell xcode-select -p)
 CPPFLAGS := -Isrc/core -Isrc/assembler -Ibuild -I$(DEVELOPER)/usr/include
-CXXFLAGS := -std=c++17 -mmacosx-version-min=12.0 -O2 -g -Wall -Wextra -Wno-unused-parameter -Wno-unused-but-set-variable
+ARCHS ?= $(shell uname -m)
+CXXFLAGS := -std=c++17 -mmacosx-version-min=12.0 $(foreach arch,$(ARCHS),-arch $(arch)) -O2 -g -Wall -Wextra -Wno-unused-parameter -Wno-unused-but-set-variable
 LDLIBS := -lz
 CORE := trit tryte memory machine interrupt agdp disk
 OBJECTS := $(addprefix build/,$(addsuffix .o,$(CORE)))
 TEST_SOURCES := tests/core_tests.cc tests/debugger_tests.cc
 
-.PHONY: all app test sanitize security-check run
+.PHONY: all app test sanitize security-check sandbox-check verify-app release-check run
 all: app build/tg_assembler build/tunguska-cli
 
 build:
@@ -43,7 +44,7 @@ build/debugger.o: src/debugger.cc src/debugger.h Makefile | build
 build/tunguska-cli: src/cli.cc build/runtime.o $(OBJECTS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc $^ $(LDLIBS) -o $@
 
-build/Tunguska: src/macos/main.mm src/macos/DebuggerWindow.mm src/macos/DebuggerWindow.h build/runtime.o build/debugger.o $(OBJECTS)
+build/Tunguska: src/macos/main.mm src/macos/DebuggerWindow.mm src/macos/DebuggerWindow.h src/macos/FileAccess.mm src/macos/FileAccess.h build/runtime.o build/debugger.o $(OBJECTS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $(filter-out %.h,$^) $(LDLIBS) -framework Cocoa -o $@
 
 app: build/Tunguska build/boot.ternobj
@@ -52,7 +53,24 @@ app: build/Tunguska build/boot.ternobj
 	mv -f build/Tunguska.app/Contents/MacOS/Tunguska.new build/Tunguska.app/Contents/MacOS/Tunguska
 	cp build/boot.ternobj LICENSE AUTHORS NOTICE.md build/Tunguska.app/Contents/Resources/
 	cp src/macos/Info.plist build/Tunguska.app/Contents/Info.plist
-	codesign --force --sign - build/Tunguska.app
+	codesign --force --sign - --options runtime --entitlements src/macos/Tunguska.entitlements build/Tunguska.app
+
+verify-app: app
+	python3 scripts/verify_app.py build/Tunguska.app
+
+release-check:
+	python3 tests/release_tests.py
+
+build/sandbox-tests: tests/macos_sandbox_tests.mm src/macos/FileAccess.mm src/macos/FileAccess.h build/runtime.o $(OBJECTS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $(filter-out %.h,$^) $(LDLIBS) -framework Cocoa -o $@
+
+sandbox-check: build/sandbox-tests build/boot.ternobj
+	mkdir -p build/SandboxTests.app/Contents/MacOS build/SandboxTests.app/Contents/Resources
+	cp build/sandbox-tests build/SandboxTests.app/Contents/MacOS/SandboxTests
+	python3 -c 'import plistlib; plistlib.dump(dict(CFBundleIdentifier="org.tunguska.mac.sandbox-tests", CFBundleExecutable="SandboxTests", CFBundlePackageType="APPL"), open("build/SandboxTests.app/Contents/Info.plist", "wb"))'
+	cp build/boot.ternobj build/SandboxTests.app/Contents/Resources/
+	codesign --force --sign - --options runtime --entitlements src/macos/Tunguska.entitlements build/SandboxTests.app
+	python3 scripts/test_sandbox.py
 
 build/core-tests: $(TEST_SOURCES) build/runtime.o build/debugger.o $(OBJECTS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc $^ $(LDLIBS) -o $@

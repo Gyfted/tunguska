@@ -52,7 +52,27 @@ The text renderer uses scalable native monospace fonts. It maps the original dis
 - Prevented accidental copying of memory owners; released processor states, queued interrupts, and mounted disk filenames on destruction/reset.
 - Coalesced pending clock interrupts and bounded the input interrupt queue at 4,096 entries.
 - Made guest disk loading a host-UI operation and disk persistence explicit through Save Disk As. Invalid replacement disk images preserve the previous mount. Guest changes are lost on reset/eject unless saved.
-- Made image saves atomic: compress into a uniquely created sibling file, verify gzip completion, flush it, then rename it over the destination. Existing Unix permission bits are retained; new files start private. Partial temporary files are removed on reported failures. Symbolic-link and non-regular destinations are rejected. This does not claim power-loss durability for directory metadata or preservation of extended attributes/ACLs.
+- Made core image saves atomic: compress into a uniquely created sibling file, verify gzip completion, flush it, then rename it over the destination. Existing Unix permission bits are retained; new files start private. Partial temporary files are removed on reported failures. Symbolic-link and non-regular destinations are rejected. The sandboxed native UI wraps staging in Foundation-coordinated replacement; see below. This does not claim power-loss durability for directory metadata.
+
+## App Sandbox and release preparation — 2026-09-24
+
+The native app's two entitlements are App Sandbox and user-selected file
+read/write access. Hardened runtime is enabled with no exceptions, including
+no JIT or debugger-attachment exception. The interpreted ternary CPU does not
+require executable memory. File dialogs authorize selected URLs. A scoped URL
+owner keeps the current image available to Reset; no bookmark survives app exit.
+
+`src/macos/FileAccess.*` handles native saves through `NSFileCoordinator`, a
+same-volume `NSItemReplacementDirectory`, and Foundation replacement/move APIs.
+The existing checked gzip writer prepares the image there. The app does not need
+a blanket grant to the destination directory. The command-line tools retain
+their existing core save implementation and are not inside the app bundle.
+
+`scripts/release.py` exports an exact Git commit, builds/tests in that clean
+source directory, and keeps complete matching source alongside the app. Universal
+builds contain arm64 and x86_64 slices, with runtime tests on the build host only.
+Developer ID signing and notarization form a separate, credential-gated step;
+local preview packages are explicitly not marked as public releases.
 
 ## Debugger additions — 2026-09-24
 

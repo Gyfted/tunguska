@@ -2,6 +2,7 @@
 // Independent Mac frontend, 2026-09-24. Original project: Viktor Lofgren.
 #import <Cocoa/Cocoa.h>
 #import "DebuggerWindow.h"
+#import "FileAccess.h"
 #include "runtime.h"
 #include <deque>
 
@@ -133,6 +134,7 @@ static NSButton *Button(NSString *title, id target, SEL action) {
 
 @interface AppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate> {
     std::unique_ptr<tunguska::Runtime> _runtime;
+    std::unique_ptr<tunguska::macos::ScopedURL> _imageAccess;
     std::deque<char> _input;
     NSTimeInterval _lastStats;
     uint64_t _lastCycles, _revision, _nextInputCycle;
@@ -149,7 +151,7 @@ static NSButton *Button(NSString *title, id target, SEL action) {
 @property(strong) NSTextField *imageLabel;
 @property(strong) NSTextField *diskLabel;
 @property(strong) NSTimer *timer;
-@property(copy) NSString *imagePath;
+@property(strong) NSURL *imageURL;
 @end
 
 @implementation AppDelegate
@@ -246,7 +248,7 @@ static NSButton *Button(NSString *title, id target, SEL action) {
     [self setupMenu];
     [self.window makeKeyAndOrderFront:nil];
     [NSApp activateIgnoringOtherApps:YES];
-    [self loadImage:[NSBundle.mainBundle pathForResource:@"boot" ofType:@"ternobj"]];
+    [self loadImage:[NSBundle.mainBundle URLForResource:@"boot" withExtension:@"ternobj"]];
     self.timer = [NSTimer timerWithTimeInterval:1.0/60 target:self selector:@selector(tick:) userInfo:nil repeats:YES];
     self.timer.tolerance = 0.002;
     [NSRunLoop.mainRunLoop addTimer:self.timer forMode:NSRunLoopCommonModes];
@@ -279,18 +281,20 @@ static NSButton *Button(NSString *title, id target, SEL action) {
     [machine.submenu addItemWithTitle:@"Send Break" action:@selector(sendBreak:) keyEquivalent:@""];
     NSApp.mainMenu = bar;
 }
-- (void)loadImage:(NSString *)path {
-    if (!path) { [self showError:@"The bundled boot image is missing. Run make app again."]; return; }
+- (void)loadImage:(NSURL *)url {
+    if (!url) { [self showError:@"The bundled boot image is missing. Run make app again."]; return; }
     try {
-        if (_runtime) _runtime->reset(path.fileSystemRepresentation);
-        else _runtime = std::make_unique<tunguska::Runtime>(path.fileSystemRepresentation);
-        self.imagePath = path;
+        auto access = std::make_unique<tunguska::macos::ScopedURL>(url);
+        if (_runtime) _runtime->reset(url.fileSystemRepresentation);
+        else _runtime = std::make_unique<tunguska::Runtime>(url.fileSystemRepresentation);
+        _imageAccess = std::move(access);
+        self.imageURL = url;
         self.screen.runtime = _runtime.get();
         self.debugger.runtime = _runtime.get();
         [self.debugger imageDidChange];
         _input.clear(); _nextInputCycle = 0; _lastCycles = 0; _revision = 0;
         _lastStats = NSDate.timeIntervalSinceReferenceDate;
-        self.imageLabel.stringValue = [path.lastPathComponent isEqual:@"boot.ternobj"] ? @"Original Tunguska OS" : path.lastPathComponent;
+        self.imageLabel.stringValue = [url.lastPathComponent isEqual:@"boot.ternobj"] ? @"Original Tunguska OS" : url.lastPathComponent;
         self.diskLabel.stringValue = @"No disk mounted";
         [self.window makeFirstResponder:self.screen];
         [self updateStats];
@@ -346,8 +350,8 @@ static NSButton *Button(NSString *title, id target, SEL action) {
 }
 - (void)toggleRun:(id)sender { if (_runtime) { _runtime->setRunning(!_runtime->running()); [self updateStats]; [self.window makeFirstResponder:self.screen]; } }
 - (void)step:(id)sender { if (_runtime) { _runtime->step(); [self updateStats]; self.screen.needsDisplay = YES; } }
-- (void)reset:(id)sender { if (self.imagePath) [self loadImage:self.imagePath]; }
-- (void)bootOriginal:(id)sender { [self loadImage:[NSBundle.mainBundle pathForResource:@"boot" ofType:@"ternobj"]]; }
+- (void)reset:(id)sender { if (self.imageURL) [self loadImage:self.imageURL]; }
+- (void)bootOriginal:(id)sender { [self loadImage:[NSBundle.mainBundle URLForResource:@"boot" withExtension:@"ternobj"]]; }
 - (void)sendBreak:(id)sender { if (_runtime) _runtime->breakKey(); }
 - (void)example:(NSButton *)sender {
     [self bootOriginal:sender];
@@ -359,7 +363,7 @@ static NSButton *Button(NSString *title, id target, SEL action) {
     NSOpenPanel *panel = [NSOpenPanel openPanel]; panel.canChooseDirectories = NO;
     panel.message = @"Choose a complete Tunguska memory image (.ternobj).";
     [panel beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse response) {
-        if (response == NSModalResponseOK) [self loadImage:panel.URL.path];
+        if (response == NSModalResponseOK) [self loadImage:panel.URL];
     }];
 }
 - (void)mountDisk:(id)sender {
@@ -368,7 +372,11 @@ static NSButton *Button(NSString *title, id target, SEL action) {
     panel.message = @"Mount a virtual floppy. Changes stay in memory until you choose Save Disk As.";
     [panel beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse response) {
         if (response != NSModalResponseOK) return;
-        try { self->_runtime->mount(panel.URL.fileSystemRepresentation); self.diskLabel.stringValue = panel.URL.lastPathComponent; }
+        try {
+            tunguska::macos::ScopedURL access(panel.URL);
+            self->_runtime->mount(panel.URL.fileSystemRepresentation);
+            self.diskLabel.stringValue = panel.URL.lastPathComponent;
+        }
         catch (const std::exception& e) { [self showError:[NSString stringWithUTF8String:e.what()]]; }
     }];
 }
@@ -377,7 +385,7 @@ static NSButton *Button(NSString *title, id target, SEL action) {
     NSSavePanel *panel = [NSSavePanel savePanel]; panel.nameFieldStringValue = @"disk.ternobj";
     [panel beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse response) {
         if (response != NSModalResponseOK) return;
-        try { self->_runtime->saveDisk(panel.URL.fileSystemRepresentation); }
+        try { tunguska::macos::saveDiskImage(*self->_runtime, panel.URL); }
         catch (const std::exception& e) { [self showError:[NSString stringWithUTF8String:e.what()]]; }
     }];
 }
