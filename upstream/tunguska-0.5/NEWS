@@ -1,0 +1,80 @@
+tunguska -- History of visible changes.
+
+Copyright (C) 2008, Viktor Lofgren <vlofgren@gmail.com>
+See the end for copying conditions.
+
+Please send tunguska bug reports to vlofgren@gmail.com.
+
+Version 0.5
+* Added experimental compiler (3CC) for a ternary C-like language.
+  o A memory image written for 3CC.
+* Added instructions for swift and easy 12-trit arithmetics.
+* Various minor bugfixes.
+
+It should be noted that 3CC is not stable, or very pretty. It works
+reasonably well, but it is significantly less stable than the rest
+of tunguska.
+
+Version 0.4.1
+* Minor bugfix, fixing instructions CAD, XAX, XAY
+
+Version 0.4
+* (%INC)lude directive added to the assembler.
+  o Memory image code now relies on this functionality,
+    so it is important to remember that you only need to
+    assemble ram.asm -- the rest is included automagically.
+* Reworked floppy disk system, accessible from
+  within the machine at runtime.
+* Various speed enhancing fixes.
+
+Version 0.0.3:
+* Reworked, brighter interface.
+* Auxiliary General Data Processor that allows for
+  block operations and floating point arithmetics.
+* More lenient assembler, allows uppercase labels 
+  and variables.
+* Several new operations:
+ o XAM  -  eXchange Accumulator value with Memory value
+ o XAX  -  eXchange Accumulator value with X value
+ o XAY  -  eXchange Accumulator value with Y value
+ o XYX  -  eXchange Y value with X value
+ o CAD  -  Compare ADdress (X:Y vs. argument)
+ o PAUSE - Pseudo instruction, triggers pause of Tunguska
+	    (useful in debugging)
+* Performance boost on a damn near epic scale. It should
+  be somewhere in the neighborhood of twice as fast as 0.0.2!
+* Less GNU-dependent code. Should be easier to port to other
+  systems.
+* Indirect-Y addressing was broken, it isn't any more.
+
+Version 0.0.2:
+
+* New and improved interrupt system.
+* New raster and vector based graphics modes.
+* Mouse support.
+* A completely rewritten assembler based on yacc/flex.
+ o Assembler syntax has been extensively modified to provide
+   clearer assembly code.
+ o Inline arithmetics. 
+ o Assembler variables.
+* Zlib compression of memory images.
+
+Version 0.0.1: 
+
+* Initial release.
+
+-------------------------------------------------------
+Copying information:
+
+Copyright (C) 2008, Viktor Lofgren <vlofgren@gmail.com>
+
+   Permission is granted to anyone to make or distribute verbatim copies
+   of this document as received, in any medium, provided that the
+   copyright notice and this permission notice are preserved,
+   thus giving the recipient permission to redistribute in turn.
+
+   Permission is granted to distribute modified versions
+   of this document, or of portions of it,
+   under the above conditions, provided also that they
+   carry prominent notices stating who last changed them.
+

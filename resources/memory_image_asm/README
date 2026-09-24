@@ -1,0 +1,14 @@
+This directory contains a series of assembler source code files
+that can be compiled into a memory image. To do so (after installing
+tunguska), run
+
+$ tg_assembler -o myimage.ternobj ram.asm
+
+When it's done (it shouldn't take many seconds), you will find
+a file myimage.ternobj has been created. To load it into Tunguska,
+simply run
+
+$ tunguska myimage.ternobj
+
+For more information, visit the Tunguska webpage
+  http://www.acc.umu.se/~achtt315/tunguska

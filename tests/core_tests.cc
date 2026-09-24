@@ -1,0 +1,115 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+#include "runtime.h"
+#include "core/values.h"
+#include <climits>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <stdexcept>
+#include <zlib.h>
+
+static void check(bool ok, const char *message) {
+    if (!ok) throw std::runtime_error(message);
+}
+static int wrap(int64_t n, int base = 729) {
+    return int(((n + base/2) % base + base) % base - base/2);
+}
+static int sign(int n) { return (n > 0) - (n < 0); }
+static void command(tunguska::Runtime& r, const std::string& text) {
+    for (char c : text + '\n') { r.key(c); r.run(10000); }
+    r.run(500000);
+    r.capture(true);
+}
+int main(int argc, char **argv) {
+    try {
+        check(argc == 2, "Pass the boot image path");
+        for (int i = -364; i <= 364; ++i) {
+            tryte t(i);
+            check(t.to_int() == i, "tryte roundtrip");
+            char nonary[4]; snprintf(nonary, sizeof(nonary), "%03X", t.nonaryhex());
+            check(tryte(nonary).to_int() == i, "nonary roundtrip");
+            for (int j = -364; j <= 364; ++j) {
+                check((t + j).to_int() == wrap(i+j), "tryte addition");
+                check((t * tryte(j)).to_int() == wrap(i*j), "tryte multiplication");
+            }
+        }
+        for (int i = -265720; i <= 265720; ++i) {
+            tryte high, low; tryte::int_to_word(i, high, low);
+            check(tryte::word_to_int(high, low) == i, "word roundtrip");
+        }
+        std::cout << "PASS exhaustive tryte arithmetic and 531441 word roundtrips\n";
+
+        machine cpu;
+        for (int a = -364; a <= 364; ++a) for (int b = -364; b <= 364; ++b) {
+            for (int carry = -1; carry <= 1; ++carry) {
+                cpu.PCH = cpu.PCL = 0; cpu.A = a; cpu.P = 0; cpu.P[machine::C] = carry;
+                cpu.memref(0) = machine::qop(machine::IMMEDIATE, machine::ADD); cpu.memref(1) = b;
+                cpu.instruction(); const int sum = a+b+carry;
+                const int overflow = sum > 364 ? 1 : sum < -364 ? -1 : 0;
+                check(cpu.A.to_int() == wrap(sum), "ADD result");
+                check(cpu.P[machine::V].to_int() == overflow, "ADD overflow flag");
+                check(cpu.P[machine::C].to_int() == overflow, "ADD carry flag");
+                check(cpu.P[machine::G].to_int() == sign(wrap(sum)), "ADD sign flag");
+            }
+            cpu.PCH = cpu.PCL = 0; cpu.A = a; cpu.P = 0;
+            cpu.memref(0) = machine::qop(machine::IMMEDIATE, machine::CMP); cpu.memref(1) = b;
+            cpu.instruction();
+            check(cpu.A.to_int() == a, "CMP preserves accumulator");
+            check(cpu.P[machine::G].to_int() == sign(wrap(a-b)), "CMP result flag");
+            check(cpu.P[machine::V].to_int() == (a-b > 364 ? 1 : a-b < -364 ? -1 : 0), "CMP overflow flag");
+        }
+        check(std::string(machine::opcode_to_string(40)) == "DEBUG", "last opcode lookup");
+        check(ternarytoascii(100) == 0, "character map bounds");
+        for (int i = 0; i < 10000; ++i) cpu.queue_interrupt(new clock_interrupt());
+        check(cpu.pending_interrupts() == 1, "clock interrupts coalesce");
+        for (int i = 0; i < 10000; ++i) cpu.queue_interrupt(new keyboard_interrupt(10));
+        check(cpu.pending_interrupts() == 4096, "interrupt queue remains bounded");
+        for (int n : {INT_MIN, -265721, -265720, 265720, 265721, INT_MAX})
+            check(&cpu.memref(n) == &cpu.memref(wrap(n, MEMSIZ)), "memory wraps at boundaries");
+        std::cout << "PASS 2.1 million ADD/CMP cases, opcode and memory boundaries\n";
+
+        char directory[] = "/tmp/tunguska-tests-XXXXXX";
+        check(mkdtemp(directory), "temporary directory");
+        const auto image = std::string(directory) + "/image.ternobj";
+        cpu.memref(-265720) = -364; cpu.memref(265720) = 364;
+        cpu.save(image.c_str());
+        memory restored; restored.load(image.c_str());
+        check(restored.memref(-265720).to_int() == -364 && restored.memref(265720).to_int() == 364, "image save/load");
+        auto rejects = [&](const std::string& path) {
+            bool rejected = false;
+            try { restored.load(path.c_str()); } catch (const std::runtime_error&) { rejected = true; }
+            check(rejected, "reject malformed image");
+            check(restored.memref(-265720).to_int() == -364, "failed load preserves memory");
+        };
+        rejects(std::string(directory)+"/missing");
+        std::ofstream(image, std::ios::binary | std::ios::trunc) << "short";
+        rejects(image);
+        std::vector<unsigned char> invalid(MEMSIZ*2, 0); invalid[0]=255; invalid[1]=127;
+        gzFile zipped = gzopen(image.c_str(), "wb"); gzwrite(zipped, invalid.data(), unsigned(invalid.size())); gzclose(zipped);
+        rejects(image);
+        std::filesystem::remove_all(directory);
+        std::cout << "PASS memory image roundtrip and malformed image rejection\n";
+
+        tunguska::Runtime runtime(argv[1]);
+        runtime.run(500000); runtime.capture(true);
+        check(runtime.text().find("TUNGUSKA STARTED") != std::string::npos, "original OS boot banner");
+        command(runtime, "HELP");
+        check(runtime.text().find("Available commands") != std::string::npos, "keyboard interrupts and HELP");
+        const auto count = runtime.cycles(); runtime.setRunning(false);
+        check(runtime.run(10000) == 0 && runtime.cycles() == count, "pause");
+        runtime.step(); check(runtime.cycles() == count+1 && !runtime.running(), "single step");
+        runtime.reset(argv[1]); check(runtime.cycles() == 0 && runtime.running(), "reset");
+        runtime.run(500000); command(runtime, "BROWN");
+        check(runtime.frame().mode == 1 && runtime.frame().vertices.size() == 243, "vector demo");
+        runtime.reset(argv[1]); runtime.run(500000); command(runtime, "RASTERDEMO729");
+        check(runtime.frame().mode == -1 && runtime.frame().auxiliary == 0, "729 color demo");
+        runtime.reset(argv[1]); runtime.run(500000); command(runtime, "RASTERDEMO3");
+        check(runtime.frame().mode == -1 && runtime.frame().auxiliary == 1, "3 color demo");
+        runtime.reset(argv[1]); runtime.run(500000); command(runtime, "CHARMAP");
+        check(runtime.frame().mode == 0, "character demo");
+        std::cout << "PASS original OS boot, HELP, pause/step/reset, character/vector/raster demos\n";
+        return 0;
+    } catch (const std::exception& e) {
+        std::cerr << "FAIL: " << e.what() << '\n'; return 1;
+    }
+}

@@ -1,0 +1,54 @@
+0.5:
+	* Included ternary C compiler (tunguska_3cc)
+	* Added new instructions for 12 trit arithmetics: MLW, DVW, MDW, ADW
+
+0.4.1:
+	* Fixed broken instructions: CAD, XAY, XAX
+
+0.4:
+	* Added %INC directive
+	* Floppy loading/unloading at runtime
+	* Value caching added to tryte class
+	* System time accessible from AGDP
+
+0.0.3.2:
+	* Fix of vector-mode bug.
+
+0.0.3.1:
+	* Fix of see-through background bug.
+
+0.0.3:
+	* Assembler now uses the C++ interfaces for bison/flex, and has gotten
+	a more stylistically clear C++ code (as opposed to the old bastard
+	C/C++ code); rules have also been made more lax, with regards to 
+	variable/label naming, etc.
+	* Value caching of nonary values as opposed to the old method of
+	computing nonary constants runtime has paved way for an almost
+	doubling of performance.
+	* Raster graphics has gotten a new video mode, 3 color monochromous.
+	* Interface is now largely drawn using a single, static image instead
+	of colored rectangles
+	* New instructions: CAD, XAM, XAX, XAY, XYX, PAUSE.
+	* New device, AGDP (Auxiliary General Data Processor), does block
+	operations and floating point arithmetics.
+	* Indirect Y addressing had slipped by in the STUB stage without
+	notice until now. It now works properly.
+
+0.0.2:
+	* Painting is done in a separate thread, which greatly
+		boosts performance (especially for systems with multiple cores)
+	* Reworked interrupt system (with queueing, instead of the old
+		"chuck it over the shoulder" way of dealing with unwanted
+		interrupts)
+	* Assembler is nearly completetely rewritten to rely on flex and bison
+		instead of the patchwork of code that was the old assembler. 
+		The assembly syntax is also modified, to be hopefully 
+		a lot clearer.
+	* Rudimentary vector graphics!
+	* Rudimentary raster graphics!
+	* Fixes in too many previously defunct instructions to list.
+	* Virtual floppy drive.
+	* Mouse support.
+	* Zlib compression of output.
+
+0.0.1: Initial release.

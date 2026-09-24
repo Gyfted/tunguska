@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleExecutable</key><string>Tunguska</string>
+  <key>CFBundleIdentifier</key><string>org.tunguska.mac</string>
+  <key>CFBundleName</key><string>Tunguska</string>
+  <key>CFBundleDisplayName</key><string>Tunguska</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>0.6.0</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>LSMinimumSystemVersion</key><string>12.0</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>NSPrincipalClass</key><string>NSApplication</string>
+  <key>NSHumanReadableCopyright</key><string>Original Tunguska © 2007–2008 Viktor Lofgren. Independent fork maintained by Vinny Lingham. GNU GPL v2 or later.</string>
+</dict></plist>

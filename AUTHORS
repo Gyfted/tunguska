@@ -1,0 +1,16 @@
+Tunguska — original project
+
+Viktor Lofgren — designed and implemented Tunguska, its original emulator,
+assembler, guest operating system and experimental 3CC compiler.
+Original copyright notices and contributors' Git history are retained.
+https://github.com/vlofgren/tunguska
+https://tunguska.sourceforge.net/
+
+Tunguska for Mac — independent continuation
+
+Vinny Lingham — maintainer of this fork (2026–).
+https://github.com/Gyfted/tunguska
+
+The Mac port, tests and documentation were developed with assistance from
+OpenAI Codex. This acknowledgment does not assign or transfer ownership of
+the original project or replace any existing copyright notice.
