@@ -118,3 +118,43 @@ sandboxed JSON exports. Exported aggregates, all 1,797 records and drawing
 preparation fields were independently checked. Targeted Clang analysis of the
 vision engine and native lab reported no diagnostics. These checks leave the
 existing emulator/compiler and independent-review limitations unchanged.
+
+## Ternary Explorer 0.10 checks
+
+Explorer is a fixed-size, offline robot simulation. Its bundled 3CC program runs
+through the existing interpreter, with no network, device access, external world
+import, native code loading, or new entitlements. The guest receives only the
+observed map and mission inputs. Hidden-world access stays in the simulator's
+sensor and collision checks. Unknown cells never count as traversable ground.
+
+Inputs validate all cell values, indices, policy and battery bounds before
+replacing a session. Every guest action, reason, route, target, direction and
+reachable-cell count must match an independent C++ planner before movement.
+Invalid lengths, corrupt results and instruction-limit failures cancel the plan.
+An edited physical wall can block a previously clear route even when its reading
+is missed; the simulator rejects that move and updates the observation. Cancelling
+a plan cannot apply a later move, and depleted batteries cannot take free scans.
+
+Normal checks passed 622 guest/reference decisions across boundary/random inputs
+and closed-loop missions. Missions exercise all three presets, both priorities
+and both sensor modes; seeded-maze missions use guest samples followed by the
+native reference, while the other presets use the guest throughout. The smaller
+ASan/UBSan suite passed 46 guest/reference decisions plus the host missions.
+Regression cases include low-battery return, stale readings after edits, malformed
+inputs, tampered outputs, infinite-loop limits, debugger stepping and breakpoints.
+
+Maps have 225 cells. Missions are bounded by 4,096 scans; guest plans have a ten
+million instruction limit and cooperative UI execution batches. JSON exports use
+the existing coordinated, atomic write through a user-selected Save panel. They
+contain export-time maps and bounded decision history, not a complete replay of
+world edits or cancelled scans. Native UI checks covered goal completion, live
+edits, pause/step/debug, preset/seed/base/goal/options changes, low-battery return
+and a parsed JSON export whose routes, counters, energy and reference matches
+were independently checked. Targeted Clang analysis of the Explorer engine and
+native lab reported no diagnostics.
+
+These are focused checks, not an independent audit or hardware safety validation.
+The return reserve is a heuristic and can fail under arbitrary world changes or
+lost routes. Guest execution remains in the UI process, and all existing emulator
+and compiler limitations above still apply. Developer ID signing and notarization
+remain deferred at the maintainer's request.

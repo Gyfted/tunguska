@@ -93,14 +93,14 @@ build/debugger.o: src/debugger.cc src/debugger.h Makefile | build
 build/tunguska-cli: src/cli.cc build/runtime.o $(OBJECTS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc $^ $(LDLIBS) -o $@
 
-build/Tunguska: src/macos/main.mm src/macos/VisionLab.mm src/macos/VisionLab.h build/vision.o src/macos/DebuggerWindow.mm src/macos/DebuggerWindow.h src/macos/FileAccess.mm src/macos/FileAccess.h build/runtime.o build/debugger.o $(OBJECTS)
+build/Tunguska: src/macos/ExplorerLab.mm src/macos/ExplorerLab.h build/explorer.o src/macos/main.mm src/macos/VisionLab.mm src/macos/VisionLab.h build/vision.o src/macos/DebuggerWindow.mm src/macos/DebuggerWindow.h src/macos/FileAccess.mm src/macos/FileAccess.h build/runtime.o build/debugger.o $(OBJECTS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $(filter-out %.h,$^) $(LDLIBS) -framework Cocoa -o $@
 
-app: build/Tunguska build/boot.ternobj build/boot-3cc.ternobj build/vision.ternobj
+app: build/Tunguska build/boot.ternobj build/boot-3cc.ternobj build/vision.ternobj build/explorer.ternobj
 	mkdir -p build/Tunguska.app/Contents/MacOS build/Tunguska.app/Contents/Resources
 	cp build/Tunguska build/Tunguska.app/Contents/MacOS/Tunguska.new
 	mv -f build/Tunguska.app/Contents/MacOS/Tunguska.new build/Tunguska.app/Contents/MacOS/Tunguska
-	cp build/boot.ternobj build/boot-3cc.ternobj build/vision.ternobj resources/vision/vision-digits.bin resources/vision/vision-model.json resources/vision/vision-weights.bin resources/vision/vision-int8-weights.bin resources/vision/VISION-NOTICE.md LICENSE AUTHORS NOTICE.md build/Tunguska.app/Contents/Resources/
+	cp build/boot.ternobj build/boot-3cc.ternobj build/vision.ternobj build/explorer.ternobj resources/vision/vision-digits.bin resources/vision/vision-model.json resources/vision/vision-weights.bin resources/vision/vision-int8-weights.bin resources/vision/VISION-NOTICE.md LICENSE AUTHORS NOTICE.md build/Tunguska.app/Contents/Resources/
 	cp src/macos/Info.plist build/Tunguska.app/Contents/Info.plist
 	codesign --force --sign - --options runtime --entitlements src/macos/Tunguska.entitlements build/Tunguska.app
 
@@ -160,3 +160,24 @@ build/vision-tests-sanitized: tests/vision_tests.cc src/vision.cc src/vision.h r
 vision-sanitize: build/vision-tests-sanitized build/vision.ternobj build/vision-reference.ternobj
 	UBSAN_OPTIONS=halt_on_error=1 build/vision-tests-sanitized build/vision.ternobj resources/vision/vision-digits.bin --quick --reference build/vision-reference.ternobj > build/vision-sanitized.log 2>&1 || { tail -30 build/vision-sanitized.log; exit 1; }
 	@tail -3 build/vision-sanitized.log
+
+.PHONY: explorer-check explorer-sanitize
+build/explorer.ternobj: resources/explorer/navigator.3c src/explorer_protocol.h build/3cc build/tg_assembler scripts/compile_3cc.py
+	python3 scripts/compile_3cc.py $< -o $@
+
+build/explorer.o: src/explorer.cc src/explorer.h src/explorer_protocol.h Makefile | build
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -MMD -MP -c $< -o $@
+
+build/explorer-tests: tests/explorer_tests.cc build/explorer.o build/runtime.o $(OBJECTS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc $^ $(LDLIBS) -o $@
+
+explorer-check: build/explorer-tests build/explorer.ternobj
+	build/explorer-tests build/explorer.ternobj > build/explorer-tests.log 2>&1 || { tail -30 build/explorer-tests.log; exit 1; }
+	@tail -1 build/explorer-tests.log
+
+build/explorer-tests-sanitized: tests/explorer_tests.cc src/explorer.cc src/explorer.h src/explorer_protocol.h src/runtime.cc src/runtime.h $(wildcard src/core/*.cc src/core/*.h) Makefile | build
+	$(CXX) $(CPPFLAGS) -Isrc -std=c++17 -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer tests/explorer_tests.cc src/explorer.cc src/runtime.cc $(addprefix src/core/,$(addsuffix .cc,$(CORE))) $(LDLIBS) -o $@
+
+explorer-sanitize: build/explorer-tests-sanitized build/explorer.ternobj
+	UBSAN_OPTIONS=halt_on_error=1 build/explorer-tests-sanitized build/explorer.ternobj --quick > build/explorer-sanitized.log 2>&1 || { tail -30 build/explorer-sanitized.log; exit 1; }
+	@tail -1 build/explorer-sanitized.log

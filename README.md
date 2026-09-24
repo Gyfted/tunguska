@@ -27,6 +27,7 @@ Click the display and type `HELP`, then Return. Commands are uppercase. The side
 | Step, ⌘. | Execute one instruction, leaving the machine paused |
 | Debugger, ⌘D | Pause and open disassembly, breakpoints, registers and memory |
 | Ternary Vision Lab, ⌘L | Draw digits, run ternary neural inference, inspect neurons and benchmark |
+| Ternary Explorer, ⌘E | Edit a maze and watch a ternary guest navigate with incomplete knowledge |
 | Reset, ⌘R | Reload the selected memory image |
 | Open Image, ⌘O | Boot a complete `.ternobj` memory image |
 | ⌘B | Return to the bundled original operating system |
@@ -65,6 +66,25 @@ weight payloads; this does not establish a ternary hardware advantage. Everythin
 runs offline. See [the lab guide](docs/VISION-LAB.md) for controls, reproducible
 training, licensing, and the limits of this historical benchmark.
 
+## Ternary Explorer
+
+Open **Ternary Explorer** in the sidebar (⌘E) and click **Run**. The left map is
+the real maze; the right is the robot's knowledge: **−1 blocked, 0 unknown,
++1 observed clear**. A compiled 3CC guest searches that observed map and chooses
+each route. The simulator supplies sensor readings and enforces physical walls;
+it never gives the guest the hidden world.
+
+Edit walls while it runs, step one turn, or **Debug brain** to step actual ternary
+instructions. Try **Explore first**, intermittent sensor readings, or a smaller
+battery to see the robot change its decisions or return to base. Three presets
+include a reproducible seeded maze. Restart preserves your edits, recharges and
+clears the robot's knowledge. Export the current maps and decision history as JSON.
+
+This is an offline simulation and an example of explicit three-state reasoning,
+not evidence of faster ternary hardware or a physical robot controller.
+See [the Explorer guide](docs/EXPLORER.md) for controls, planning rules, memory
+addresses, validation and limits.
+
 ## Build a program
 
 ```sh
@@ -100,6 +120,7 @@ make security-check
 make sandbox-check verify-app release-check
 make compiler-check compiler-sanitize
 make vision-check vision-sanitize
+make explorer-check explorer-sanitize
 ```
 
 Tests cover every pair of tryte values for addition and multiplication, all 531,441 word conversions, 2,125,764 ADD/CMP instruction cases, memory boundaries, bounded interrupts, image roundtrips and rejection of malformed images, original OS boot and keyboard commands, pause/step/reset, and the original text/vector/raster demos. `sanitize` runs the same suite with AddressSanitizer and UndefinedBehaviorSanitizer.
@@ -114,6 +135,12 @@ also verify native ternary parity, float32/8-bit accuracy, 30 independent 3CC
 reference runs, drawing preparation, uncertainty, model/data hashes, malformed inputs,
 breakpoints, cancellation, failure rejection and instruction limits. A subset
 runs under ASan/UBSan.
+
+Explorer tests compare complete guest decisions/routes with an independent native
+reference, exercise closed-loop missions across priorities and sensor modes, and
+check unknown-cell exclusion, battery return, stale readings after wall edits,
+corrupt outputs, instruction limits, pause/step/breakpoints and cancellation.
+A bounded subset also runs under ASan/UBSan.
 
 The Mac UI was also exercised directly: boot, typed `HELP`, pause, single step, reset, vector rendering, and mouse input in the 729-color drawing program.
 
@@ -135,6 +162,7 @@ Developer ID signing and Apple notarization require Apple Developer Program memb
 
 - `src/core/` — adapted original CPU, balanced ternary math, memory, interrupts, disk and coprocessor.
 - `src/runtime.*` — window-independent execution, input, and display snapshots.
+- `src/explorer.*` and `resources/explorer/` — ternary robot simulation, reference planner and 3CC navigation guest.
 - `src/vision.*` and `resources/vision/` — offline ternary vision engine, trained assets and guest.
 - `src/debugger.*` — read-only disassembly, address validation and number formatting.
 - `src/macos/` — native AppKit window, keyboard/mouse input, graphics and file dialogs.

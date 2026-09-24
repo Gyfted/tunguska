@@ -29,7 +29,7 @@ def verify(app, developer_id=False, notarized=False):
         if "Authority=Developer ID Application:" not in signature or "Timestamp=" not in signature:
             raise ValueError("A timestamped Developer ID Application signature is required")
     for name in ("LICENSE", "AUTHORS", "NOTICE.md", "boot.ternobj", "boot-3cc.ternobj",
-                 "VISION-NOTICE.md", "vision.ternobj", "vision-digits.bin", "vision-model.json", "vision-weights.bin", "vision-int8-weights.bin"):
+                 "VISION-NOTICE.md", "vision.ternobj", "vision-digits.bin", "vision-model.json", "vision-weights.bin", "vision-int8-weights.bin", "explorer.ternobj"):
         if not (app / "Contents" / "Resources" / name).is_file():
             raise ValueError("Required app resource is missing: " + name)
     if notarized:

@@ -1,0 +1,34 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Independent Explorer guest protocol, 2026-09-24. Shared with the 3CC source.
+#pragma once
+#define EXP_SIDE 15
+#define EXP_CELLS 225
+#define EXP_STATUS 100000
+#define EXP_POSITION 100001
+#define EXP_HOME 100002
+#define EXP_GOAL 100003
+#define EXP_ENERGY 100004
+#define EXP_POLICY 100006
+#define EXP_RETURNING 100007
+#define EXP_MAP 100100
+#define EXP_ACTION 100330
+#define EXP_REASON 100331
+#define EXP_TARGET 100332
+#define EXP_DX 100333
+#define EXP_DY 100334
+#define EXP_LENGTH 100335
+#define EXP_EXPANDED 100336
+#define EXP_ROUTE 100400
+#define EXP_DISTANCE 110000
+#define EXP_PARENT 110300
+#define EXP_QUEUE 110600
+#define EXP_GOAL_ROUTE 1
+#define EXP_FRONTIER 2
+#define EXP_RETURN 3
+#define EXP_ARRIVED 4
+#define EXP_DOCKED 5
+#define EXP_NO_ROUTE 6
+#define EXP_BATTERY 7
+#define EXP_SCAN 8
+#define EXP_NO_RETURN 9
+#define EXP_TURN_LIMIT 10

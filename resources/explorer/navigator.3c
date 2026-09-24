@@ -1,0 +1,79 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Independent ternary explorer brain, Vinny Lingham's Mac fork, 2026-09-24.
+// The simulator provides observations only. BFS and every route decision run here.
+#include "../../src/explorer_protocol.h"
+asm("SEI", "JSR main", "idle: PAUSE", "JMP idle");
+int adjacent(int cell, int direction) {
+    if(direction==0) {if(cell>=15)return cell-15;}
+    if(direction==1) {if(cell%15<14)return cell+1;}
+    if(direction==2) {if(cell<210)return cell+15;}
+    if(direction==3) {if(cell%15>0)return cell-1;}
+    return -1;
+}
+int absolute(int value) {if(value<0)return -value;return value;}
+void main() {
+    char* known=(char*)EXP_MAP;
+    char* distance=(char*)EXP_DISTANCE;
+    char* parent=(char*)EXP_PARENT;
+    char* queue=(char*)EXP_QUEUE;
+    char* route=(char*)EXP_ROUTE;
+    int position=*(char*)EXP_POSITION;
+    int home=*(char*)EXP_HOME;
+    int goal=*(char*)EXP_GOAL;
+    int energy=*(int*)EXP_ENERGY;
+    int policy=*(char*)EXP_POLICY;
+    int returning=*(char*)EXP_RETURNING;
+    int i=0;int head=0;int tail=1;int at=0;int next=0;int d=0;
+    int target=position;int reason=EXP_NO_ROUTE;int action=-1;
+    int homeDistance=0;int count=0;int unknown=0;int score=0;int best=10000;
+    int length=0;int temp=0;int dx=0;int dy=0;
+    *(char*)EXP_STATUS=1;
+    for(i=0;i<225;i++) {distance[i]=-1;parent[i]=-1;if(known[i]!=0)count++;}
+    distance[position]=0;queue[0]=position;
+    while(head<tail) {
+        at=queue[head];head++;
+        for(d=0;d<4;d++) {
+            next=adjacent(at,d);
+            // Explicit comparisons matter: negative means blocked, zero means unknown.
+            if(next>=0) {if(known[next]==1) {if(distance[next]<0) {
+                distance[next]=distance[at]+1;parent[next]=at;queue[tail]=next;tail++;
+            }}}
+        }
+    }
+    homeDistance=distance[home];
+    if(position==goal) reason=EXP_ARRIVED;
+    else if(energy<=1) reason=EXP_BATTERY;
+    else if((returning==1)||((homeDistance>=0)&&(energy<=2*homeDistance+6))) {
+        if(position==home) reason=EXP_DOCKED;
+        else if(homeDistance<0)reason=EXP_NO_RETURN;
+        else {target=home;reason=EXP_RETURN;action=1;}
+    } else if((distance[goal]>=0)&&((policy==0)||(count>=192))) {
+        target=goal;reason=EXP_GOAL_ROUTE;action=1;
+    } else {
+        target=-1;
+        for(i=0;i<225;i++) {if(distance[i]>=0) {
+            unknown=0;
+            for(d=0;d<4;d++) {next=adjacent(i,d);if(next>=0) {if(known[next]==0)unknown++;}}
+            if(unknown>0) {
+                score=distance[i]*4;
+                if(policy==0)score+=absolute(i%15-goal%15)+absolute(i/15-goal/15);
+                else score-=unknown*6;
+                if(score<best) {best=score;target=i;}
+            }
+        }}
+        if(target<0) {
+            if(distance[goal]>=0) {target=goal;reason=EXP_GOAL_ROUTE;action=1;}
+            else {target=position;reason=EXP_NO_ROUTE;}
+        } else if(target==position) {reason=EXP_SCAN;action=0;}
+        else {reason=EXP_FRONTIER;action=1;}
+    }
+    if(action==1) {
+        at=target;
+        while(at!=position) {route[length]=at;length++;at=parent[at];}
+        for(i=0;i<length/2;i++) {temp=route[i];route[i]=route[length-1-i];route[length-1-i]=temp;}
+        dx=route[0]%15-position%15;dy=route[0]/15-position/15;
+    }
+    *(char*)EXP_ACTION=action;*(char*)EXP_REASON=reason;*(char*)EXP_TARGET=target;
+    *(char*)EXP_DX=dx;*(char*)EXP_DY=dy;*(char*)EXP_LENGTH=length;*(char*)EXP_EXPANDED=tail;
+    *(char*)EXP_STATUS=2;
+}
