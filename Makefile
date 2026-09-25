@@ -131,6 +131,13 @@ build/rendering-tests: tests/macos_rendering_tests.mm src/macos/SearchWindow.mm 
 rendering-check: build/rendering-tests
 	build/rendering-tests
 
+build/rendering-tests-sanitized: tests/macos_rendering_tests.mm src/macos/SearchWindow.mm src/macos/SearchWindow.h $(SEARCH_SOURCES) src/search.h src/macos/SearchService.h src/macos/Interface.mm src/macos/Interface.h src/macos/ExplorerLab.mm src/macos/ExplorerLab.h src/macos/DebuggerWindow.mm src/macos/DebuggerWindow.h src/macos/FileAccess.mm src/macos/FileAccess.h build/explorer.o build/runtime.o build/debugger.o $(OBJECTS)
+	$(CXX) $(CPPFLAGS) -Isrc -std=c++17 -g -O1 -fobjc-arc -fsanitize=address,undefined -fno-omit-frame-pointer $(filter-out %.h,$^) $(LDLIBS) $(SEARCH_FRAMEWORKS) -o $@
+
+.PHONY: rendering-sanitize
+rendering-sanitize: build/rendering-tests-sanitized
+	ASAN_OPTIONS=detect_stack_use_after_return=1 UBSAN_OPTIONS=halt_on_error=1 build/rendering-tests-sanitized
+
 build/sandbox-tests: tests/macos_sandbox_tests.mm src/macos/FileAccess.mm src/macos/FileAccess.h $(SEARCH_SOURCES) src/search.h src/macos/SearchService.h build/runtime.o $(OBJECTS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $(filter-out %.h,$^) $(LDLIBS) $(SEARCH_FRAMEWORKS) -o $@
 

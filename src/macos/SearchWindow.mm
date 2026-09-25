@@ -93,9 +93,11 @@
     _status.stringValue=@"Preparing the local index…";[self setBusy:YES];__weak SearchWindow *weak=self;
     dispatch_async(_worker,^{@autoreleasepool{
         try {
-            auto last=std::chrono::steady_clock::now();
+            auto last=std::chrono::steady_clock::now()-std::chrono::milliseconds(101);
             auto progress=[&](NSString *message){auto now=std::chrono::steady_clock::now();if(std::chrono::duration<double>(now-last).count()<.1)return;last=now;
-                dispatch_async(dispatch_get_main_queue(),^{SearchWindow *self=weak;if(self&&!cancelled->load())self->_status.stringValue=message;});};
+                // Copy out of the C++ closure: a nested block must not retain its stack 'this'.
+                __weak SearchWindow *target=weak;auto flag=cancelled;NSString *update=[message copy];
+                dispatch_async(dispatch_get_main_queue(),^{SearchWindow *self=target;if(self&&!flag->load())self->_status.stringValue=update;});};
             SearchService *service=[SearchService indexFolder:url cancel:*cancelled progress:progress semantic:semantic];
             dispatch_async(dispatch_get_main_queue(),^{SearchWindow *self=weak;if(!self)return;if(cancelled->load()){self->_status.stringValue=@"Cancelled. Your previous index is still available.";[self setBusy:NO];return;}
                 self->_service=service;self->_folder=url;self->_access=access;self->_hits=@[];self->_report=nil;[self->_table reloadData];self->_reveal.enabled=NO;

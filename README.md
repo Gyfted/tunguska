@@ -159,7 +159,7 @@ make compiler-check compiler-sanitize
 make vision-check vision-sanitize
 make explorer-check explorer-sanitize
 make weight-check weight-sanitize weight-gpu-validation
-make rendering-check
+make rendering-check rendering-sanitize
 make search-check search-sanitize
 ```
 

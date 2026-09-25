@@ -104,7 +104,7 @@ on millions of documents or across millions of users' machines.
 ## Reproduce
 
 ```sh
-make search-check search-sanitize sandbox-check
+make search-check search-sanitize rendering-check rendering-sanitize sandbox-check
 python3 scripts/benchmark_search.py --output build/search-benchmark-keywords
 python3 scripts/benchmark_search.py --meaning --max-files 400 --output build/search-benchmark-meaning
 ```

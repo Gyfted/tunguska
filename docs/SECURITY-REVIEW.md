@@ -326,3 +326,10 @@ before assignment. The required AppKit regression checks label lifetimes after
 autorelease, row bounds and multiline PDF excerpts; it fails on the earlier
 implementation with the same nil-array exception and passes after the fix.
 The earlier local preview was rejected and never notarized or published.
+
+A second UI test found a dangling C++ callback closure captured by a queued
+Objective-C progress block. Search and the matching Weight Race callback now
+copy their weak window reference and cancellation token into block-owned locals.
+An asynchronous regression deliberately lets indexing finish before draining
+the main queue; AddressSanitizer rejects the old callback and passes the fixed
+version. `rendering-sanitize` is now a required clean-release gate.

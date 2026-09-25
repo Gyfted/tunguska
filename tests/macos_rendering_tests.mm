@@ -9,6 +9,9 @@
 #include <iostream>
 
 namespace ex = tunguska::explorer;
+@interface SearchWindow (RegressionTesting)
+- (void)indexFolder:(NSURL *)url;
+@end
 @protocol ExplorerMapRendering
 @property(assign) const ex::Simulation *simulation;
 @property(assign) const ex::Decision *decision;
@@ -122,6 +125,22 @@ static void CheckSearchRows() {
     [window close];
 }
 
+static void CheckSearchProgressLifetime() {
+    NSURL *directory=[NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:NSUUID.UUID.UUIDString] isDirectory:YES];
+    Check([NSFileManager.defaultManager createDirectoryAtURL:directory withIntermediateDirectories:YES attributes:nil error:nil],"create UI index fixture");
+    Check([@"A receipt for office furniture." writeToURL:[directory URLByAppendingPathComponent:@"receipt.txt"] atomically:YES encoding:NSUTF8StringEncoding error:nil],"write UI index fixture");
+    SearchWindow *window=[[SearchWindow alloc] init];
+    [window indexFolder:directory];
+    dispatch_queue_t worker=[window valueForKey:@"worker"];
+    // Keep the main queue blocked until the indexing callback's C++ closure dies.
+    dispatch_sync(worker,^{});
+    CFRunLoopRunInMode(kCFRunLoopDefaultMode,.05,false);
+    Check([window valueForKey:@"service"]!=nil,"queued progress/completion survives the indexing callback");
+    Check(![[window valueForKey:@"busy"] boolValue],"indexing finishes on the main queue");
+    [window close];
+    [NSFileManager.defaultManager removeItemAtURL:directory error:nil];
+}
+
 int main() {
     @autoreleasepool {
         @try {
@@ -129,6 +148,7 @@ int main() {
                 [NSApplication sharedApplication];
                 CheckAttributes();
                 CheckSearchRows();
+                CheckSearchProgressLifetime();
                 Check(RenderMaps() == 144, "normal maps render in both appearances");
                 {
                     ReplaceFontMethod unavailable(@selector(monospacedSystemFontOfSize:weight:), reinterpret_cast<IMP>(MissingFont));

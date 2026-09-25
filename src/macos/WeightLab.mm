@@ -115,7 +115,8 @@ static void Draw(NSString *text,NSRect rect,CGFloat size,NSColor *color){[text d
                 int lastPercent=-1;
                 auto progress=[&](const std::string& message,double fraction){int percent=int(fraction*100);if(percent==lastPercent)return;lastPercent=percent;
                     NSString *status=[NSString stringWithFormat:@"%u × %u · %@",sizes[i],sizes[i],String(message)];double overall=(i+fraction)/sizes.size();
-                    dispatch_async(dispatch_get_main_queue(),^{WeightLab *self=weak;if(self&&!cancellation->load()){self->_status.stringValue=status;self->_progress.doubleValue=overall;}});};
+                    __weak WeightLab *target=weak;auto flag=cancellation;
+                    dispatch_async(dispatch_get_main_queue(),^{WeightLab *self=target;if(self&&!flag->load()){self->_status.stringValue=status;self->_progress.doubleValue=overall;}});};
                 wb::Result result=runner.run({sizes[i],sizes[i],seed,count},*cancellation,progress);
                 dispatch_async(dispatch_get_main_queue(),^{WeightLab *self=weak;if(self){self->_results.push_back(result);[self->_resultTable reloadData];
                     if(self->_results.size()==1)[self->_resultPicker removeAllItems];
