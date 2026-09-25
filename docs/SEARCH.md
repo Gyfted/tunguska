@@ -153,3 +153,27 @@ is cooperative between document/page/passage operations. Adversarial PDF parsing
 needs a separate constrained helper before claiming production hardening for
 arbitrary corpora. Automatic refresh, persistent/incremental indexing, OCR,
 multilingual semantic models and million-document scaling are not implemented.
+
+## Release verification
+
+Version **0.13.0 (build 11)** was built from
+`1fd85a9185fe2647f72152414f2f1de455e1c146`. The clean universal build passed core,
+assembler, compiler, image-mutation, Vision, Explorer, GPU, search, AppKit,
+sanitizer, release-integrity and real App Sandbox gates. Native smoke testing
+verified folder selection, PDF page results, contextual excerpts, English
+paraphrases, refresh, Forget folder, keyboard editing, scrolling and JSON export.
+The new UI lifetime regressions were also confirmed to reject the earlier code.
+
+Apple accepted notarization submission
+`978a8ecf-3efd-4c78-bafd-e9cc81a4f971`. The final ZIP was extracted and independently
+checked for a timestamped Developer ID signature, the exact minimal entitlements,
+hardened runtime, stapled notarization, Gatekeeper acceptance and both `arm64`
+and `x86_64` slices. The app, source archive, final ZIP and SHA256SUMS were
+reverified together. Runtime tests executed the ARM64 slice on this Mac;
+Intel and older macOS runtime validation remain outstanding.
+
+Local distribution files are under `build/releases/0.13.0-1fd85a9185fe/`:
+`Tunguska-0.13.0-universal2.zip`,
+`Tunguska-0.13.0-source-1fd85a9185fe.tar.gz`, and `SHA256SUMS`.
+Distribute all three together, with the included notices. No public GitHub
+binary release was published by this work.
