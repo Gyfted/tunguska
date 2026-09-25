@@ -218,6 +218,28 @@ Distribution files are in `build/releases/0.14.1-45e3b9aceb37/`:
 `Tunguska-0.14.1-source-45e3b9aceb37.tar.gz`, and `SHA256SUMS`.
 Distribute these together. No public binary release was uploaded.
 
+### 0.15.0 color and sound update
+
+Version **0.15.0 (build 14)** was built from
+`d0ad9503e82dce069f04f5bb764188c29fe20bef`. All clean universal release gates
+passed, including normal/sanitized game and audio tests, the actual native audio
+callback, exhaustive palette indices, and App Sandbox checks. Boot took 265,984
+guest instructions; the largest integration-test frame took 308,224.
+Apple accepted submission `7edfed81-790a-485d-bac6-fa983d01c18c`.
+
+The final ZIP was extracted and verified against its manifest, including bundle
+hashes, timestamped Developer ID signing, minimal entitlements, hardened runtime,
+stapled notarization, Gatekeeper acceptance and both architecture slices. Matching
+source and distribution checksums passed. The exact signed bundle was installed
+at `build/Tunguska.app`; color, movement, a successful shot, the map and mute/unmute
+were checked there. Sound output and waveform tests ran on ARM64; Intel and older
+macOS runtime validation remain outstanding.
+
+Distribution files are in `build/releases/0.15.0-d0ad9503e82d/`:
+`Tunguska-0.15.0-universal2.zip`,
+`Tunguska-0.15.0-source-d0ad9503e82d.tar.gz`, and `SHA256SUMS`.
+Distribute all three together. No public binary release was uploaded.
+
 ## Authorship and rights
 
 The game source, map, simple pixel font, sprite designs, color palettes and
