@@ -71,6 +71,29 @@ build/breach-performance: tests/breach_performance.cc src/breach_protocol.h src/
 breach-benchmark: build/breach-performance build/breach.ternobj
 	build/breach-performance build/breach.ternobj $(BREACH_REFERENCE) $(BREACH_REFERENCE_FLAGS)
 
+# Standalone measurements only; these do not replace the shipped guest game.
+build/breach-rays.ternobj: tests/benchmarks/breach_rays.3c tests/benchmarks/breach_ray_protocol.h resources/breach/breach.3c src/breach_protocol.h src/display_protocol.h build/breach_assets.3h build/3cc build/tg_assembler scripts/compile_3cc.py
+	python3 scripts/compile_3cc.py -I build $< -o $@
+
+build/breach-rays: tests/benchmarks/breach_rays.cc tests/benchmarks/breach_ray_protocol.h src/breach_protocol.h build/breach_assets.3h build/runtime.o $(OBJECTS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc $(filter %.cc %.o,$^) $(LDLIBS) -o $@
+
+build/breach-rays-sanitized: tests/benchmarks/breach_rays.cc tests/benchmarks/breach_ray_protocol.h src/breach_protocol.h build/breach_assets.3h src/runtime.cc src/runtime.h src/display_protocol.h $(wildcard src/core/*.cc src/core/*.h)
+	$(CXX) $(CPPFLAGS) -Isrc -std=c++17 -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer tests/benchmarks/breach_rays.cc src/runtime.cc $(addprefix src/core/,$(addsuffix .cc,$(CORE))) $(LDLIBS) -o $@
+
+build/weight-sweep: tests/benchmarks/weight_sweep.mm src/macos/WeightBenchmark.mm src/weight_benchmark.cc src/weight_benchmark.h
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $(filter %.mm %.cc,$^) -framework Foundation -framework Metal -framework MetalPerformanceShaders -o $@
+
+.PHONY: breach-ray-benchmark breach-ray-sanitize weight-sweep
+breach-ray-benchmark: build/breach-rays build/breach-rays.ternobj
+	build/breach-rays build/breach-rays.ternobj build/breach-rays.json
+
+breach-ray-sanitize: build/breach-rays-sanitized build/breach-rays.ternobj
+	UBSAN_OPTIONS=halt_on_error=1 build/breach-rays-sanitized build/breach-rays.ternobj build/unused.json --check-only
+
+weight-sweep: build/weight-sweep
+	build/weight-sweep resources/benchmark/matvec.metal build/weight-sweep.json
+
 .PHONY: breach-check breach-sanitize
 breach-check: build/breach-tests build/breach.ternobj
 	build/breach-tests build/breach.ternobj build/breach-frame.rgba

@@ -1,0 +1,8 @@
+PASS seed=729 size=1024 fp16_gpu_ms=0.0169167 mps_gpu_ms=0.020375 ternary_gpu_ms=0.0187917 fp16_wall_ms=0.161083 mps_wall_ms=0.1675 ternary_wall_ms=0.1725 error=0
+PASS seed=729 size=4096 fp16_gpu_ms=0.07675 mps_gpu_ms=0.072 ternary_gpu_ms=0.0386667 fp16_wall_ms=0.22 mps_wall_ms=0.245541 ternary_wall_ms=0.2385 error=0
+PASS seed=729 size=8192 fp16_gpu_ms=0.242667 mps_gpu_ms=0.236625 ternary_gpu_ms=0.0930833 fp16_wall_ms=0.392792 mps_wall_ms=0.392834 ternary_wall_ms=0.24 error=0
+PASS seed=729 size=16384 fp16_gpu_ms=0.96975 mps_gpu_ms=0.939958 ternary_gpu_ms=0.33425 fp16_wall_ms=1.12421 mps_wall_ms=1.09142 ternary_wall_ms=0.477166 error=0
+PASS seed=730 size=1024 fp16_gpu_ms=0.00491667 mps_gpu_ms=0.00558332 ternary_gpu_ms=0.00499999 fp16_wall_ms=0.139917 mps_wall_ms=0.139333 ternary_wall_ms=0.1395 error=0
+PASS seed=730 size=4096 fp16_gpu_ms=0.039875 mps_gpu_ms=0.03625 ternary_gpu_ms=0.0264167 fp16_wall_ms=0.177375 mps_wall_ms=0.174917 ternary_wall_ms=0.163875 error=0
+PASS seed=730 size=8192 fp16_gpu_ms=0.243 mps_gpu_ms=0.23825 ternary_gpu_ms=0.093125 fp16_wall_ms=0.4035 mps_wall_ms=0.391291 ternary_wall_ms=0.240416 error=0
+PASS seed=730 size=16384 fp16_gpu_ms=0.943083 mps_gpu_ms=0.939542 ternary_gpu_ms=0.338 fp16_wall_ms=1.10317 mps_wall_ms=1.10233 ternary_wall_ms=0.501083 error=0

@@ -1,0 +1,2 @@
+UBSAN_OPTIONS=halt_on_error=1 build/breach-rays-sanitized build/breach-rays.ternobj build/unused.json --check-only
+PASS 3060 scenes, 495720 exact distance/side/cell values

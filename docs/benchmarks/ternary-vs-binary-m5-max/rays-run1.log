@@ -1,0 +1,2 @@
+PASS 3060 scenes, 495720 exact distance/side/cell values
+54-ray job, median round mean: ternary guest 3533.387 us; native binary 0.233 us; native faster 15133.116x; guest instructions p50=52096.000

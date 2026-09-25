@@ -65,6 +65,10 @@ native audio output device. This is a small
 Doom-style experiment with new assets, not original Doom or a performance claim.
 See [the game guide](docs/BREACH.md) for controls, architecture and tests.
 
+[Ternary versus binary benchmarks](docs/TERNARY-VS-BINARY.md) compare the game's
+actual ray-casting routine with native C++, and packed ternary AI weights with
+FP16 on the same GPU. They separate interpreter overhead from storage benefits.
+
 ## Local Search
 
 Open **Local Search** (⌘F), choose a folder, and search text, Markdown and PDFs

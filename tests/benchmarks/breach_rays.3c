@@ -1,0 +1,23 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Benchmark the actual game's cast(), tables and integer arithmetic. Renaming
+// its C entry point leaves the startup assembly's literal JSR main targeting
+// this harness. No rendering, gameplay or host-native ray casting occurs here.
+#define main breach_game_main
+#include "../../resources/breach/breach.3c"
+#undef main
+#include "breach_ray_protocol.h"
+void main() {
+    int i=0;int base=0;int output=0;
+    for(i=0;i<144;i++)MAP[i]=level[i];
+    BYTE(RAY_COMMAND)=2;
+    while(1) {
+        while(BYTE(RAY_COMMAND)!=1){}
+        base=ANGLE*RAY_COLUMNS;
+        for(i=0;i<RAY_COLUMNS;i++) {
+            cast(rayX[base+i],rayY[base+i]);
+            output=RAY_OUTPUT+i*6;
+            WORD(output)=rayDistance;WORD(output+2)=raySide;WORD(output+4)=rayCell;
+        }
+        BYTE(RAY_COMMAND)=2;
+    }
+}
