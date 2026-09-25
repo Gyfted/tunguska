@@ -2,6 +2,7 @@
 // Run the compiled game on the real guest CPU; no native simulation substitute.
 #include "runtime.h"
 #include "breach_protocol.h"
+#include "game_input.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -24,9 +25,10 @@ struct Game {
     void word(int address,int value){tryte::int_to_word(value,runtime.cpu().memref(address),runtime.cpu().memref(address+1));}
     void ready(int previous) {
         const auto start=runtime.cycles();
+        const auto revision=runtime.frame().revision;
         while(runtime.cycles()-start<4000000) {
             runtime.run(256);
-            if(word(BR_FRAME)!=previous && word(BR_FRAME)>0 && byte(BR_STATUS)!=1) {
+            if(runtime.frame().revision!=revision && word(BR_FRAME)!=previous && word(BR_FRAME)>0 && byte(BR_STATUS)!=1) {
                 maxFrameInstructions=std::max(maxFrameInstructions,runtime.cycles()-start);return;
             }
         }
@@ -64,6 +66,17 @@ struct Game {
 };
 int main(int argc,char** argv) {
     try {
+        tunguska::GameInput input;
+        require(input.press('W',0),"Initial movement must be immediate");
+        require(!input.press('w',0.01),"OS repeat duplicated a held key");
+        require(input.repeat(0.074).empty() && input.repeat(0.076)=="w","Movement repeat delay/rate wrong");
+        require(input.press('d',0.08) && input.repeat(0.16)=="wd","Combined movement/turn failed");
+        input.release('W');require(input.repeat(0.24)=="d","Released key continued moving");
+        require(input.press('m',0.25) && input.press('r',0.25),"Map/restart initial press failed");
+        require(input.repeat(4)=="d" && input.repeat(4).empty(),"Slow frames accumulated repeats or toggled map/restart");
+        input.clear();require(input.repeat(5).empty(),"Focus/pause clear left stuck keys");
+        require(!input.press('x',5) && !input.press(char(255),5),"Unrecognized key accepted");
+        require(input.press(' ',5) && input.repeat(5.17).empty() && input.repeat(5.19)==" ","Fire repeat rate wrong");
         const auto start=std::chrono::steady_clock::now();
         Game g(argc>1?argv[1]:"build/breach.ternobj");
         require(g.byte(BR_STATUS)==BR_READY && g.byte(BR_HEALTH)==9,"Boot state wrong");
@@ -102,7 +115,7 @@ int main(int argc,char** argv) {
         g.reach(10*12+7);require(g.byte(BR_CELLS)==3,"Third cell was not collected");
         g.reach(1*12+10);require(g.byte(BR_STATUS)==BR_WON,"Complete route did not reach victory");
         g.restart();require(g.byte(BR_MAP+3*12+4)==2,"Restart failed to restore pickups");
-        require(g.maxFrameInstructions<1000000,"Frame exceeds the interactive guest budget");
+        require(g.maxFrameInstructions<350000,"Frame exceeds the optimized interactive guest budget");
         std::cout<<"PASS ternary guest: movement, wall collisions, turning, strafe, map, shooting, occlusion, ammo, damage, death, restart, supplies and complete collectible/exit route. Max frame "
                  <<g.maxFrameInstructions<<" instructions; "<<std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count()<<" seconds.\n";
     } catch(const std::exception& e){std::cerr<<"FAIL Breach: "<<e.what()<<'\n';return 1;}

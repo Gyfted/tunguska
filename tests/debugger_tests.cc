@@ -33,6 +33,11 @@ void debuggerTests(const char* image) {
     }
     for (int raw = -364; raw <= 364; ++raw) {
         cpu.memref(0) = raw;
+        const tryte value(raw);
+        const auto split = machine::decode(value);
+        check(split.mode == (value >> 4).to_int() &&
+              split.opcode == ((value << 2) >> 2).to_int(),
+              "fast instruction decode matches original trit operations for all 729 encodings");
         const auto decoded = dbg::disassemble(cpu, 0);
         check(decoded.length >= 1 && decoded.length <= 3 && !decoded.text.empty(), "every instruction encoding can be inspected");
     }

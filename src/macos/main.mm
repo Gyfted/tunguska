@@ -10,6 +10,7 @@
 #import "Interface.h"
 #include "runtime.h"
 #include "breach_protocol.h"
+#include "game_input.h"
 #include <deque>
 #include <algorithm>
 #include <cmath>
@@ -17,9 +18,14 @@
 static NSColor *RGB(unsigned rgb) {
     return [NSColor colorWithSRGBRed:((rgb >> 16) & 255)/255.0 green:((rgb >> 8) & 255)/255.0 blue:(rgb & 255)/255.0 alpha:1];
 }
-@interface ScreenView : NSView
+@interface ScreenView : NSView {
+    tunguska::GameInput _gameInput;
+}
 @property(nonatomic, assign) tunguska::Runtime *runtime;
 @property(nonatomic, copy) void (^input)(NSString *);
+@property(nonatomic) BOOL gameMode;
+- (void)clearGameInput;
+- (NSString *)repeatedGameInput;
 @end
 
 @implementation ScreenView
@@ -39,14 +45,20 @@ static NSColor *RGB(unsigned rgb) {
 }
 - (BOOL)isFlipped { return YES; }
 - (BOOL)acceptsFirstResponder { return YES; }
+- (void)clearGameInput { _gameInput.clear(); }
+- (BOOL)resignFirstResponder { [self clearGameInput]; return [super resignFirstResponder]; }
+- (NSString *)repeatedGameInput {
+    const auto keys = _gameInput.repeat(NSProcessInfo.processInfo.systemUptime);
+    return [NSString stringWithUTF8String:keys.c_str()];
+}
 - (void)mouseDown:(NSEvent *)event {
     [self.window makeFirstResponder:self];
-    if (_runtime) _runtime->mouseButton(true);
+    if (_runtime && !self.gameMode) _runtime->mouseButton(true);
 }
-- (void)mouseUp:(NSEvent *)event { if (_runtime) _runtime->mouseButton(false); }
+- (void)mouseUp:(NSEvent *)event { if (_runtime && !self.gameMode) _runtime->mouseButton(false); }
 - (void)mouseDragged:(NSEvent *)event { [self mouseMoved:event]; }
 - (void)mouseMoved:(NSEvent *)event {
-    if (_runtime && _runtime->frame().mode != 0) {
+    if (_runtime && !self.gameMode && _runtime->frame().mode != 0) {
         const auto delta = [](double value) {
             constexpr double limit = machine::max_interrupts * 13;
             return std::isfinite(value) ? int(std::clamp(value, -limit, limit)) : 0;
@@ -62,7 +74,26 @@ static NSColor *RGB(unsigned rgb) {
 - (void)keyDown:(NSEvent *)event {
     if (!_runtime) return;
     if (event.keyCode == 53) { _runtime->breakKey(); return; }
+    if (self.gameMode) {
+        if (!_runtime->running() || event.isARepeat || (event.modifierFlags & NSEventModifierFlagCommand)) return;
+        NSString *keys = event.charactersIgnoringModifiers ?: @"";
+        for (NSUInteger i = 0; i < keys.length; ++i) {
+            const unichar key = [keys characterAtIndex:i];
+            if (key < 128 && _gameInput.press((char)key, NSProcessInfo.processInfo.systemUptime) && self.input)
+                self.input([NSString stringWithFormat:@"%c", tunguska::GameInput::normalize((char)key)]);
+        }
+        return;
+    }
     if ((event.modifierFlags & NSEventModifierFlagCommand) == 0 && self.input) self.input(event.characters ?: @"");
+}
+- (void)keyUp:(NSEvent *)event {
+    if (self.gameMode) {
+        NSString *keys = event.charactersIgnoringModifiers ?: @"";
+        for (NSUInteger i = 0; i < keys.length; ++i) {
+            const unichar key = [keys characterAtIndex:i];
+            if (key < 128) _gameInput.release((char)key);
+        }
+    } else [super keyUp:event];
 }
 - (void)paste:(id)sender {
     NSString *text = [NSPasteboard.generalPasteboard stringForType:NSPasteboardTypeString];
@@ -380,6 +411,8 @@ static NSColor *RGB(unsigned rgb) {
         self.imageLabel.stringValue = [url.lastPathComponent isEqual:@"boot.ternobj"] ? @"Original Tunguska OS" : url.lastPathComponent;
         if ([url.lastPathComponent isEqual:@"boot-3cc.ternobj"]) self.imageLabel.stringValue = @"Experimental 3CC System";
         const BOOL breach = [url.lastPathComponent isEqual:@"breach.ternobj"];
+        self.screen.gameMode = breach;
+        [self.screen clearGameInput];
         if (breach) self.imageLabel.stringValue = @"Ternary Breach · original guest game";
         self.inputHint.stringValue = breach ? @"W/S move · A/D turn · Q/E strafe · Space fire · M map · R restart · ⌘B return to OS" : @"Click the display to type · HELP lists commands · Esc sends Break · ⌘V pastes";
         self.screen.accessibilityHelp = self.inputHint.stringValue;
@@ -391,21 +424,32 @@ static NSColor *RGB(unsigned rgb) {
 }
 - (void)enqueue:(NSString *)text {
     // The guest has a small keyboard buffer: feed pasted text gradually.
-    for (NSUInteger i = 0; i < text.length && _input.size() < 8192; ++i) {
+    for (NSUInteger i = 0; i < text.length && _input.size() < (self.screen.gameMode ? 26 : 8192); ++i) {
         unichar c = [text characterAtIndex:i];
+        if (self.screen.gameMode && (c >= 128 || !tunguska::GameInput::accepts((char)c))) continue;
         if (c < 128 && (asciitoternary((char)c) || c == '\r' || c == 127)) _input.push_back((char)c);
     }
 }
 - (void)tick:(NSTimer *)timer {
     if (!_runtime) return;
-    if (_runtime->running() && !_input.empty() && _runtime->cycles() >= _nextInputCycle) {
+    const BOOL game = self.screen.gameMode;
+    if (!_runtime->running()) [self.screen clearGameInput];
+    if (game && _runtime->running() && _input.empty() && _runtime->cpu().memref(BR_STATUS).to_int() == BR_READY &&
+        _runtime->cpu().memref(BR_INPUT_HEAD) == _runtime->cpu().memref(BR_INPUT_TAIL))
+        [self enqueue:[self.screen repeatedGameInput]];
+    BOOL sentGameInput = NO;
+    if (game && _runtime->running()) {
+        for (int count = 0; count < 4 && !_input.empty(); ++count) {
+            _runtime->key(_input.front()); _input.pop_front(); sentGameInput = YES;
+        }
+    } else if (_runtime->running() && !_input.empty() && _runtime->cycles() >= _nextInputCycle) {
         _runtime->key(_input.front()); _input.pop_front();
         _nextInputCycle = _runtime->cycles() + 5000;
     }
     // The guest game needs more instructions per picture; retain the same UI
     // time limit and execute every instruction through the original interpreter.
-    const BOOL drawingGame = [self.imageURL.lastPathComponent isEqual:@"breach.ternobj"] && _runtime->cpu().memref(BR_STATUS).to_int() == 1;
-    _runtime->run(drawingGame ? 100000 : 18000, 7);
+    const BOOL drawingGame = game && (sentGameInput || _runtime->cpu().memref(BR_STATUS).to_int() == 1);
+    _runtime->run(drawingGame ? 100000 : 18000, 7, game);
     if (_revision != _runtime->frame().revision) {
         _revision = _runtime->frame().revision;
         self.screen.needsDisplay = YES;
@@ -458,7 +502,11 @@ static NSColor *RGB(unsigned rgb) {
     [self.debugger showWindow:sender];
     [self updateStats];
 }
-- (void)toggleRun:(id)sender { if (_runtime) { _runtime->setRunning(!_runtime->running()); [self updateStats]; [self.window makeFirstResponder:self.screen]; } }
+- (void)windowDidResignKey:(NSNotification *)notification {
+    [self.screen clearGameInput];
+    if (self.screen.gameMode) _input.clear();
+}
+- (void)toggleRun:(id)sender { if (_runtime) { [self.screen clearGameInput]; if (self.screen.gameMode) _input.clear(); _runtime->setRunning(!_runtime->running()); [self updateStats]; [self.window makeFirstResponder:self.screen]; } }
 - (void)step:(id)sender { if (_runtime) { _runtime->step(); [self updateStats]; self.screen.needsDisplay = YES; } }
 - (void)reset:(id)sender { if (self.imageURL) [self loadImage:self.imageURL]; }
 - (void)bootOriginal:(id)sender { [self loadImage:[NSBundle.mainBundle URLForResource:@"boot" withExtension:@"ternobj"]]; }

@@ -1,0 +1,32 @@
+Ternary Breach responsiveness benchmark — 2026-09-25
+Apple M5 Max, ARM64, macOS 27.0, Apple Clang 21, -O2.
+Baseline: 0.14.0, source 6dcc9f898677ea5d88adbe84ef13013217b98b67.
+Candidate: 0.14.1 (build 13), source alongside this report.
+
+Harness: tests/breach_performance.cc, 210 frames including boot, rapid actions,
+map toggles, restarts and all 36 angles from five positions. Each frame waits for
+both guest ready state and a captured framebuffer. UI-style instruction and 7 ms
+batch limits are used; timer sleeps and AppKit drawing are omitted. Tick estimates
+are not measured input-to-photon latency, continuous FPS, or guarantees for other
+hardware. CPU time includes batch overhead/idle instructions until yielding.
+
+The original-runtime harness was compiled with -DTUNGUSKA_BASELINE_RUNTIME,
+the 0.14.0 source include path and its runtime/core objects, and run against
+its bundled breach.ternobj. Its 'candidate' line below is the OLD release.
+
+candidate: 210 frames; CPU ms p50=36.8655 p95=43.885; 60Hz tick estimate ms p50=100 p95=116.667; instructions p50=374775 max=455846
+
+The current harness was run with the current and 0.14.0 guest images. Both use
+the current interpreter. 'reference' retains the old 18k initial / 100k busy
+quotas and no early frame yield; 'candidate' uses the new input scheduling.
+Exact framebuffer/game-state parity is checked after each pair.
+
+candidate: 210 frames; CPU ms p50=13.5168 p95=19.0315; 60Hz tick estimate ms p50=33.3333 p95=50; instructions p50=177717 max=276662
+reference: 210 frames; CPU ms p50=29.43 p95=36.4001; 60Hz tick estimate ms p50=83.3333 p95=100; instructions p50=397681 max=498673
+PASS exact pixels and state for every paired frame
+
+Median CPU-time speedup including original-to-current interpreter changes:
+36.8655 / 13.5168 = 2.7274x. p95: 43.885 / 19.0315 = 2.3059x.
+Holding keys is separately tested for a 75 ms movement repeat, 180 ms fire
+repeat, single-press map/restart, combined movement/turn, release, clear,
+OS-repeat suppression and no catch-up burst after delayed frames.

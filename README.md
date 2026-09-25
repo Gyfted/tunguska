@@ -52,6 +52,9 @@ The app requests only App Sandbox and user-selected file read/write access. Ther
 Choose **Ternary Breach** in the sidebar or press **⌘5**. Recover three reactor
 cells, evade or disable four sentinels, and find the exit. **W/S** move, **A/D**
 turn, **Q/E** strafe, **Space** fires, **M** shows the map and **R** restarts.
+Hold movement/turn keys for continuous stepping without the typing-repeat delay.
+Version 0.14.1 reduces guest drawing work and interpreter overhead; the guide
+records the measured improvement and its limits.
 The original one-level game is compiled with 3CC: ray casting, sprites, collision,
 combat and HUD drawing all run on the ternary guest. It uses the existing
 324 × 243 three-color display and original graphics peripheral. This is a small

@@ -148,6 +148,16 @@ int main(int argc, char **argv) {
         check(runtime.frame().mode == -1 && runtime.frame().auxiliary == 1, "3 color demo");
         runtime.reset(argv[1]); runtime.run(500000); command(runtime, "CHARMAP");
         check(runtime.frame().mode == 0, "character demo");
+        auto& frameCPU = runtime.cpu();
+        frameCPU.P[machine::I] = 1; frameCPU.PCH = frameCPU.PCL = 0;
+        frameCPU.memref(0) = machine::qop(machine::ABS, machine::JMP);
+        frameCPU.memref(1) = frameCPU.memref(2) = 0;
+        frameCPU.memrefi(TV_DDD, TV_DDB) = 1;
+        const auto revision = runtime.frame().revision;
+        check(runtime.run(4096,0,true) == 1024 && runtime.frame().revision == revision+1,
+              "interactive execution yields at the first captured frame");
+        frameCPU.memrefi(TV_DDD, TV_DDB) = 1;
+        check(runtime.run(4096) == 4096, "default execution keeps its instruction budget after capture");
         std::cout << "PASS original OS boot, HELP, pause/step/reset, character/vector/raster demos\n";
         return 0;
     } catch (const std::exception& e) {

@@ -168,9 +168,7 @@ bool machine::instruction(const std::function<bool(int)>& pauseBefore) {
 	int ip = tryte::word_to_int(PCH, PCL);
 	if (pauseBefore && pauseBefore(ip)) return false;
 	instruction_pending = false;
-	tryte instruction = memref(ip);
-	tryte highbits = instruction >> 4;
-	instruction = (instruction << 2) >> 2;
+	const auto decoded = decode(memref(ip));
 	tryte* arg = &A;
 	tryte* abs1 = &PCL,* abs2 = &PCH;
 	
@@ -179,9 +177,9 @@ bool machine::instruction(const std::function<bool(int)>& pauseBefore) {
 	static tryte cheatarg1, cheatarg2;
 
 	if(trace || get_state()->is_tracing()) { 
-		const char* opname = translation_table[instruction.to_int()+40];
+		const char* opname = translation_table[decoded.opcode+40];
 		printf("%.3X:%.3X %s\t", PCH.nonaryhex(), PCL.nonaryhex(), opname);
-		switch(highbits.to_int()) {
+		switch(decoded.mode) {
 			case ACC: printf("A / Implicit\n"); break;
 			case ABS: printf("%.3X:%.3X\n", memref(ip+1).nonaryhex(), memref(ip+2).nonaryhex()); break;
 			case INDIRECT: printf("(%.3X:%.3X)\n", memref(ip+1).nonaryhex(), memref(ip+2).nonaryhex()); break;
@@ -199,7 +197,7 @@ bool machine::instruction(const std::function<bool(int)>& pauseBefore) {
 	if((CL > memrefi(TV_444, TV_441)) == 1) CL = 0;
 
 	/* Address translation (a bit of a mess)*/
-	switch(highbits.to_int()) {
+	switch(decoded.mode) {
 		case ABS: abs1 = &memref(ip+1);
 			  abs2 = &memref(ip+2);
 			  
@@ -261,7 +259,7 @@ bool machine::instruction(const std::function<bool(int)>& pauseBefore) {
 			break;
 	}
 
-	switch(instruction.to_int()) {
+	switch(decoded.opcode) {
 		case CLV: clv(); break;
 		case BRK: soft_brk(); break;
 		case RTI: rti(); break;
@@ -343,7 +341,7 @@ bool machine::instruction(const std::function<bool(int)>& pauseBefore) {
 		case PAUSE: pause(); break;
 		case DEBUG: debug(); break;
 
-		default: if (allow_diagnostic()) printf("%d: unknown opcode %d\n", ip, instruction.to_int());
+		default: if (allow_diagnostic()) printf("%d: unknown opcode %d\n", ip, decoded.opcode);
 	}
 
 	current_state->heartbeat();

@@ -355,3 +355,13 @@ execution limit for arbitrary memory images. The one-million-instruction frame
 limit belongs to the integration test, not an application-wide watchdog. Existing
 emulator, compiler and in-process PDF-parser limitations remain. This is focused
 testing, not an independent security audit; Intel runtime testing is outstanding.
+
+The 0.14.1 responsiveness update lowers the regression frame limit to 350,000
+instructions. It retains the seven-millisecond cooperative UI budget and adds
+early yielding at completed frames. Numeric instruction decoding is checked
+against the original trit operations for all 729 encodings. Guest HUD caching and
+unrolled glyph/span copying were compared with 0.14.0 for exact framebuffer and
+state equality across 210 frames. Held-key repetition is bounded, ignores OS
+repeat events, clears on release/focus loss/pause, and never catches up missed
+repeats. Non-game keyboard behavior retains the original path. The game does not
+subscribe to unused mouse interrupts. No permissions or entitlements are added.

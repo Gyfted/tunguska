@@ -25,6 +25,8 @@ asm("SEI", "LAD breach_irq", "STX 265718", "STY 265719", "JSR main",
 #define CELLS BYTE(BR_CELLS)
 #define KILLS BYTE(BR_KILLS)
 
+char redrawHUD;
+char previousHealth;char previousAmmo;char previousCells;char previousKills;char previousMessage;
 int rayDistance;
 int raySide;
 int rayCell;
@@ -44,19 +46,39 @@ void fill(int address,int length,char ink) {
     WORD(-265715)=address;WORD(-265713)=ink;WORD(-265711)=length;BYTE(-265716)=11;
 }
 // Each tryte is six monochrome trits. No host drawing primitive is introduced.
-void column(int x,int top,int bottom,char ink) {
+void column(char x,char top,char bottom,char ink) {
     if((x<0)||(x>=54))return;
-    top=maximum(top,26);bottom=minimum(bottom,205);
+    if(top<26)top=26;if(bottom>205)bottom=205;
     if(bottom<=top)return;
-    WORD(80030)=-264262+top*54+x;BYTE(80032)=bottom-top;BYTE(80033)=ink;
-    asm("LDX 80030", "LDY 80031", "LDA 80033", "breach_column: STA X,Y",
-        "PSH #0", "PSH #54", "ADW X,Y", "DEC 80032", "JGT breach_column");
+    WORD(80030)=-264262+(int)top*54+x;BYTE(80032)=(bottom-top)/6;
+    BYTE(80038)=(bottom-top)%6;BYTE(80033)=ink;
+    // Six rows per loop amortize guest address arithmetic and branches.
+    asm("LDA 80032", "JEQ breach_column_tail", "LDA 80033",
+        "breach_column_block: LDY #0", "STA (80030),Y",
+        "LDY #54", "STA (80030),Y", "LDY #108", "STA (80030),Y",
+        "LDY #162", "STA (80030),Y", "LDY #216", "STA (80030),Y",
+        "LDY #270", "STA (80030),Y",
+        "LDX 80030", "LDY 80031", "PSH #0", "PSH #324", "ADW X,Y",
+        "STX 80030", "STY 80031", "DEC 80032", "JGT breach_column_block",
+        "breach_column_tail: LDA 80038", "JEQ breach_column_end",
+        "LDX 80030", "LDY 80031", "LDA 80033", "breach_column_pixel: STA X,Y",
+        "PSH #0", "PSH #54", "ADW X,Y", "DEC 80038", "JGT breach_column_pixel",
+        "breach_column_end:");
 }
 void label(char* text,int x,int y) {
-    int i=0;int row=0;int code=0;
+    int i=0;int code=0;
     while((text[i]!=0)&&(x+i<54)) {
         code=text[i];if((code<0)||(code>=100))code=0;
-        for(row=0;row<7;row++)SCREEN[(y+row)*54+x+i]=font[code*7+row];
+        WORD(80034)=-264262+y*54+x+i;WORD(80036)=font+code*7;
+        // Copy each glyph with ordinary guest indirect-indexed loads/stores.
+        // Every six-trit row is one tryte; no native text renderer is involved.
+        asm("LDY #0", "LDA (80036),Y", "STA (80034),Y",
+            "LDY #1", "LDA (80036),Y", "LDY #54", "STA (80034),Y",
+            "LDY #2", "LDA (80036),Y", "LDY #108", "STA (80034),Y",
+            "LDY #3", "LDA (80036),Y", "LDY #162", "STA (80034),Y",
+            "LDY #4", "LDA (80036),Y", "LDY #216", "STA (80034),Y",
+            "LDY #5", "LDA (80036),Y", "LDY #270", "STA (80034),Y",
+            "LDY #6", "LDA (80036),Y", "LDY #324", "STA (80034),Y");
         i++;
     }
 }
@@ -100,6 +122,7 @@ int visible(int x,int y) {
 }
 void restart() {
     int i=0;
+    redrawHUD=1;
     for(i=0;i<144;i++)MAP[i]=level[i];
     for(i=0;i<4;i++)BYTE(BR_ENEMIES+i)=1;
     PX=121;PY=121;ANGLE=9;HEALTH=9;AMMO=16;CELLS=0;KILLS=0;
@@ -211,7 +234,8 @@ void render() {
     int ending=BYTE(BR_STATUS);
     BYTE(BR_STATUS)=1;
     directionX=cosine[ANGLE];directionY=cosine[(ANGLE+27)%36];
-    fill(-264262,13122,-364);
+    if(redrawHUD==1)fill(-264262,13122,-364);
+    else fill(-264262+26*54,82*54,-364);
     fill(-264262+108*54,97*54,-273);
     for(i=109;i<205;i+=2)fill(-264262+i*54,54,-91);
     for(col=0;col<54;col++) {
@@ -241,17 +265,27 @@ void render() {
     column(27,174,199,-364);
     if(BYTE(BR_FLASH)==1){for(col=24;col<=30;col++)column(col,158+absolute(col-27)*3,171,364);}
     if(BYTE(BR_MAP_VISIBLE)==1)mapView();
-    label("TERNARY BREACH",2,5);label("RECOVER 3 CELLS THEN REACH THE EXIT",2,16);
-    label("HEALTH",2,211);number(HEALTH,9,211);label("AMMO",15,211);number(AMMO,20,211);
-    label("CELLS",26,211);number(CELLS,32,211);label("DRONES",38,211);number(KILLS,45,211);
-    label("W S MOVE  A D TURN  Q E STRAFE  SPACE FIRE  M MAP",2,232);
-    if(BYTE(BR_MESSAGE)==0)label("FIND THE CELLS  AVOID OR DISABLE THE SENTINELS",2,222);
-    if(BYTE(BR_MESSAGE)==1)label("REACTOR CELL RECOVERED",2,222);
-    if(BYTE(BR_MESSAGE)==2)label("SUPPLIES COLLECTED  HEALTH RESTORED",2,222);
-    if(BYTE(BR_MESSAGE)==3)label("EXIT LOCKED  RECOVER ALL THREE CELLS",2,222);
-    if(BYTE(BR_MESSAGE)==4)label("NO AMMO  FIND THE SUPPLY CACHE",2,222);
-    if(BYTE(BR_MESSAGE)==5)label("SENTINEL DISABLED",2,222);
-    if(BYTE(BR_MESSAGE)==6)label("HIT  MOVE AWAY OR DISABLE THE SENTINEL",2,222);
+    if(redrawHUD==1) {
+        label("TERNARY BREACH",2,5);label("RECOVER 3 CELLS THEN REACH THE EXIT",2,16);
+        label("HEALTH",2,211);label("AMMO",15,211);label("CELLS",26,211);label("DRONES",38,211);
+        label("W S MOVE  A D TURN  Q E STRAFE  SPACE FIRE  M MAP",2,232);
+    }
+    if((redrawHUD==1)||(HEALTH!=previousHealth))number(HEALTH,9,211);
+    if((redrawHUD==1)||(AMMO!=previousAmmo))number(AMMO,20,211);
+    if((redrawHUD==1)||(CELLS!=previousCells))number(CELLS,32,211);
+    if((redrawHUD==1)||(KILLS!=previousKills))number(KILLS,45,211);
+    if((redrawHUD==1)||(BYTE(BR_MESSAGE)!=previousMessage)) {
+        fill(-264262+222*54,7*54,-364);
+        if(BYTE(BR_MESSAGE)==0)label("FIND THE CELLS  AVOID OR DISABLE THE SENTINELS",2,222);
+        if(BYTE(BR_MESSAGE)==1)label("REACTOR CELL RECOVERED",2,222);
+        if(BYTE(BR_MESSAGE)==2)label("SUPPLIES COLLECTED  HEALTH RESTORED",2,222);
+        if(BYTE(BR_MESSAGE)==3)label("EXIT LOCKED  RECOVER ALL THREE CELLS",2,222);
+        if(BYTE(BR_MESSAGE)==4)label("NO AMMO  FIND THE SUPPLY CACHE",2,222);
+        if(BYTE(BR_MESSAGE)==5)label("SENTINEL DISABLED",2,222);
+        if(BYTE(BR_MESSAGE)==6)label("HIT  MOVE AWAY OR DISABLE THE SENTINEL",2,222);
+    }
+    previousHealth=HEALTH;previousAmmo=AMMO;previousCells=CELLS;previousKills=KILLS;
+    previousMessage=BYTE(BR_MESSAGE);redrawHUD=0;
     if((ending==BR_WON)||(ending==BR_DEAD)) {
         fill(-264262+86*54,35*54,-364);
         if(ending==BR_WON)label("BREACH COMPLETE  YOU ESCAPED",13,93);
@@ -259,9 +293,9 @@ void render() {
         label("PRESS R TO RESTART",18,107);
     }
     WORD(BR_FRAME)=(WORD(BR_FRAME)+1)%10000;
-    BYTE(-265718)=7; // +1 redraw, -1 raster, +1 three-color framebuffer.
     if((ending==BR_WON)||(ending==BR_DEAD))BYTE(BR_STATUS)=ending;
     else BYTE(BR_STATUS)=BR_READY;
+    BYTE(-265718)=7; // Publish only after the frame and its ready state are complete.
 }
 void main() {
     char key=0;int count=0;char* queue=(char*)BR_INPUT_QUEUE;

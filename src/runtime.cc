@@ -48,13 +48,16 @@ bool Runtime::cycle(bool checkBreakpoints) {
     ++cycles_;
     return true;
 }
-uint64_t Runtime::run(uint64_t instructions, double maxMilliseconds) {
+uint64_t Runtime::run(uint64_t instructions, double maxMilliseconds, bool yieldAfterFrame) {
     const auto start = std::chrono::steady_clock::now();
     uint64_t count = 0;
     for (; count < instructions && running(); ++count) {
         if (!cycle()) break;
         // Service display handshakes even when running without a window.
-        if ((count & 1023) == 1023) capture();
+        if ((count & 1023) == 1023 && capture() && yieldAfterFrame) {
+            ++count;
+            break;
+        }
         // Check after every instruction/peripheral operation. A block operation
         // can be far more expensive than an ordinary CPU instruction.
         if (maxMilliseconds > 0 &&

@@ -27,7 +27,11 @@ the map: gray walls, white objectives and player, patterned sentinel markers.
 | ⌘D | Inspect the running guest in the debugger |
 | ⌘B | Return to the original Tunguska OS |
 
-Movement is step-based, with system key repeat. Combat advances on player actions;
+Movement is step-based. Since 0.14.1, holding movement/turn keys repeats every
+75 milliseconds when the guest is ready, without macOS's typing delay. Holding
+Space repeats at 180 milliseconds; map and restart remain single-press actions.
+Releasing keys, changing focus or pausing clears held-key state; slow frames do
+not accumulate a backlog of repeats. Combat advances on player actions;
 sentinels can damage a nearby, visible player every fourth action. Waiting does
 not cause damage. A shot consumes one round; a hit disables one sentinel.
 Walls block both shots and sentinel attacks. The exit requires all three cells,
@@ -43,17 +47,22 @@ compiles to ordinary Tunguska instructions. The image contains no native game co
 
 The display is the existing 324 × 243 three-color framebuffer: every pixel is a
 trit (black, gray or white). Wall columns are six pixels wide. A small guest
-assembly loop fills vertical spans, and the original AGDP block-set peripheral
+assembly loop fills vertical spans six rows at a time, and the original AGDP block-set peripheral
 clears horizontal regions. The existing Mac frontend converts the guest framebuffer
 to display pixels. There are no new CPU instructions, host ray caster, or GPU game
 renderer. Python generates only static map/font/trigonometric data at build time.
 
 The game uses a bounded 26-event guest keyboard queue, consuming at most four
 events before drawing another frame. Overflow drops newly arriving events. The
-Mac frontend permits up to 100,000 guest instructions per timer tick while a game
-frame is being built, retaining the existing seven-millisecond execution budget.
+Mac frontend permits up to 100,000 guest instructions per timer tick when input
+arrives or a game frame is being built, retaining the existing seven-millisecond execution budget.
 It returns to the normal 18,000-instruction quota when the guest is idle. This is
-an emulation scheduling choice, not a ternary speedup claim.
+an emulation scheduling choice, not a ternary speedup claim. A captured game frame
+yields back to AppKit immediately. Static HUD text is retained; only changing
+numbers and messages are redrawn. Font copies use short guest assembly sequences.
+The CPU still interprets every instruction; it now splits instruction codes using
+their numeric value instead of constructing and shifting temporary trit arrays.
+All 729 encodings are checked against the original decoding operations.
 
 The guest memory layout is in `src/breach_protocol.h`. Useful debugger addresses:
 
@@ -91,8 +100,28 @@ escape. An independent BFS supplies the route for the navigation test; it uses
 guest movement commands with sentinels disabled and sets cardinal headings to
 isolate navigation from the separately tested combat and turning. It is not a
 claim that an autonomous player completed combat. Each tested frame must finish
-within one million guest instructions. The sanitizer target also compiles the
+within 350,000 guest instructions. The sanitizer target also compiles the
 game with the instrumented 3CC and executes it under ASan/UBSan.
+
+`make breach-benchmark` reports guest frame CPU time, executed instructions and
+a 60 Hz scheduling estimate over 210 frames. Set `BREACH_REFERENCE=/path/to/old.ternobj`
+to compare pixels and game state against an earlier image, including every viewing
+direction from five positions, map toggles, movement, firing and restart. Both
+images then use the current CPU implementation; the reference uses the old
+instruction quotas and does not yield after capture. To measure the old CPU too,
+compile `tests/breach_performance.cc` with `-DTUNGUSKA_BASELINE_RUNTIME`, the old
+release's `src` include path and its runtime/core object files. The harness uses
+the same seven-millisecond cap but omits timer sleeps and AppKit drawing; its
+tick estimates are not measured keyboard-to-screen latency or a guarantee of FPS.
+
+On this Apple M5 Max, the original 0.14.0 CPU/runtime and guest took **36.87 ms
+median / 43.89 ms p95** of CPU time per benchmark frame. The 0.14.1 candidate took
+**13.52 ms median / 19.03 ms p95**, a **2.73× median reduction in CPU time**. The
+60 Hz scheduling estimate fell from 100 ms to 33.3 ms median. The paired image
+comparison passed all 210 pixel/state comparisons. These measurements cover the
+fixed benchmark scene set, not full application latency or all machines; held-key
+input improvements are separate. See `docs/benchmarks/breach-m5-max.txt` for the
+measurement context and raw summaries.
 
 ## Release verification — September 25, 2026
 

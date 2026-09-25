@@ -27,7 +27,9 @@ class Runtime {
 public:
     explicit Runtime(const std::string& image);
     void reset(const std::string& image);
-    uint64_t run(uint64_t instructions, double maxMilliseconds = 0);
+    // Interactive callers can return a newly captured guest frame immediately;
+    // headless/default callers retain the requested instruction budget.
+    uint64_t run(uint64_t instructions, double maxMilliseconds = 0, bool yieldAfterFrame = false);
     void step();
     void key(char ascii);
     void breakKey();

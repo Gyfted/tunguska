@@ -76,6 +76,14 @@ class machine : public memory {
 		/* Quick OP-code-assembly. Takes addressing mode and operation and
 		 * bakes it together into a complete opcode */
 		static tryte qop(tryte mode, tryte op) { return (mode << 4) + op; }
+		// Mac fork, 2026-09-25: split the cached numeric tryte without constructing
+		// and shifting temporary trit arrays. Input always comes from a tryte.
+		struct decoded_instruction { int mode, opcode; };
+		static decoded_instruction decode(const tryte& raw) {
+			const int value = raw.to_int();
+			const int mode = (value + (value < 0 ? -40 : 40)) / 81;
+			return {mode, value - mode * 81};
+		}
 	
 		tryte A, X, Y, P, S, SP, PCL, PCH, CL;
 
