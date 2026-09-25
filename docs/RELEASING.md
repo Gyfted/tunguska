@@ -1,7 +1,7 @@
 # Source and binary release procedure
 
-This fork currently publishes source only. The universal 0.15.0 Ternary Breach color/sound candidate
-(source commit `d0ad9503e82dce069f04f5bb764188c29fe20bef`) was Developer ID signed,
+This fork currently publishes source only. The universal 0.15.1 Ternary Breach combat-feedback candidate
+(source commit `84db05b665bf27a8d647a7735e343ad28e328289`) was Developer ID signed,
 accepted by Apple notarization, stapled and accepted by Gatekeeper on 2026-09-25.
 Publication is a separate step. Do not claim upstream endorsement.
 

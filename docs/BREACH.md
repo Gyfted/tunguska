@@ -256,6 +256,29 @@ Distribution files are in `build/releases/0.15.0-d0ad9503e82d/`:
 `Tunguska-0.15.0-source-d0ad9503e82d.tar.gz`, and `SHA256SUMS`.
 Distribute all three together. No public binary release was uploaded.
 
+### 0.15.1 combat feedback fix
+
+Version **0.15.1 (build 15)** was built from
+`84db05b665bf27a8d647a7735e343ad28e328289`. The old game failed the new regression:
+three forward moves followed by 36 turns killed a healthy player. The fixed game
+passes that case and the attack grace, retreat, overlapping-enemy, hit-feedback,
+death/restart and existing gameplay checks. Normal and ASan/UBSan runs passed;
+the largest tested frame took 325,120 instructions, within the unchanged 350,000
+instruction regression limit. All clean universal release gates passed.
+
+Apple accepted submission `35482d6e-c333-4e98-9211-84d37471a432`. The final ZIP,
+matching source/checksums, bundle hashes, Developer ID signature, hardened runtime,
+minimal entitlements, stapled ticket, Gatekeeper and both architecture slices
+were verified. The exact signed app was installed at `build/Tunguska.app`.
+A native UI check repeated the corridor/turn sequence: health remained nine and
+the targeting warning stayed visible. The game was restarted for the user.
+Runtime validation was on ARM64; Intel/older macOS remain untested.
+
+Distribution files are under `build/releases/0.15.1-84db05b665bf/`:
+`Tunguska-0.15.1-universal2.zip`,
+`Tunguska-0.15.1-source-84db05b665bf.tar.gz`, and `SHA256SUMS`.
+Distribute them together. No public binary release was uploaded.
+
 ## Authorship and rights
 
 The game source, map, simple pixel font, sprite designs, color palettes and
