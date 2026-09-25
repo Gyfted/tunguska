@@ -1,7 +1,7 @@
 # Source and binary release procedure
 
-This fork currently publishes source only. The universal 0.14.0 Ternary Breach candidate
-(source commit `6dcc9f898677ea5d88adbe84ef13013217b98b67`) was Developer ID signed,
+This fork currently publishes source only. The universal 0.14.1 Ternary Breach candidate
+(source commit `45e3b9aceb37a8fae34581538e98b6ab77deeb28`) was Developer ID signed,
 accepted by Apple notarization, stapled and accepted by Gatekeeper on 2026-09-25.
 Publication is a separate step. Do not claim upstream endorsement.
 

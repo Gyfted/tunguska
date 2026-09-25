@@ -149,6 +149,28 @@ Local distribution files are under `build/releases/0.14.0-6dcc9f898677/`:
 Distribute all three together with the included notices. No public GitHub binary
 release was published by this work.
 
+### 0.14.1 responsiveness update
+
+Version **0.14.1 (build 13)** was built from
+`45e3b9aceb37a8fae34581538e98b6ab77deeb28`. The full clean universal release gates
+passed, including the new input, instruction-decoding and frame-yield regressions,
+and normal/sanitized game runs. The integration suite's largest frame was 269,312
+instructions. Apple accepted submission
+`88289bff-b2d9-4315-8007-74b6dae23015`.
+
+The final ZIP was extracted and its bundle hashes, Developer ID signature,
+minimal entitlements, hardened runtime, notarization ticket, Gatekeeper acceptance
+and both architecture slices were independently verified. Source/ZIP/checksums
+matched the manifest. The exact signed app was installed at `build/Tunguska.app`
+and launched; movement and turning were verified there. Earlier native smoke
+checks also covered shooting, map, pause/resume and ordinary OS `HELP` typing.
+Only ARM64 was runtime-tested.
+
+Distribution files are in `build/releases/0.14.1-45e3b9aceb37/`:
+`Tunguska-0.14.1-universal2.zip`,
+`Tunguska-0.14.1-source-45e3b9aceb37.tar.gz`, and `SHA256SUMS`.
+Distribute these together. No public binary release was uploaded.
+
 ## Authorship and rights
 
 The game source, map, simple pixel font and sprite designs are new work in Vinny
