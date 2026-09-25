@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Independent offline ternary vision laboratory, 2026-09-24.
 #import "VisionLab.h"
+#import "Interface.h"
 #import "DebuggerWindow.h"
 #import "FileAccess.h"
 #include "vision.h"
@@ -12,22 +13,11 @@
 namespace v = tunguska::vision;
 static NSColor *Green() { return [NSColor colorWithSRGBRed:.43 green:.85 blue:.65 alpha:1]; }
 static NSColor *Orange() { return [NSColor colorWithSRGBRed:1 green:.58 blue:.34 alpha:1]; }
-static NSTextField *Text(NSString *s, CGFloat size = 12, BOOL mono = NO) {
-    NSTextField *t = [NSTextField wrappingLabelWithString:s];
-    t.font = mono ? [NSFont monospacedSystemFontOfSize:size weight:NSFontWeightRegular] : [NSFont systemFontOfSize:size];
-    t.selectable = YES;
-    return t;
-}
+static NSTextField *Text(NSString *s, CGFloat size = 12, BOOL mono = NO) { return TGText(s,size,mono); }
 static NSButton *Button(NSString *s, id target, SEL action) {
-    return [NSButton buttonWithTitle:s target:target action:action];
+    return TGButton(s, nil, target, action);
 }
-static NSStackView *Stack(NSArray<NSView *> *views, BOOL vertical = NO) {
-    NSStackView *s = [NSStackView stackViewWithViews:views];
-    s.orientation = vertical ? NSUserInterfaceLayoutOrientationVertical : NSUserInterfaceLayoutOrientationHorizontal;
-    s.alignment = vertical ? NSLayoutAttributeLeading : NSLayoutAttributeCenterY;
-    s.spacing = 10;
-    return s;
-}
+static NSStackView *Stack(NSArray<NSView *> *views, BOOL vertical = NO) { return TGStack(views,vertical,10); }
 static void DrawText(NSString *s, NSPoint point, CGFloat size, NSColor *color, BOOL mono = NO) {
     [s drawAtPoint:point withAttributes:@{NSFontAttributeName:mono ? [NSFont monospacedSystemFontOfSize:size weight:NSFontWeightRegular] : [NSFont systemFontOfSize:size], NSForegroundColorAttributeName:color}];
 }
@@ -203,7 +193,7 @@ static void DrawText(NSString *s, NSPoint point, CGFloat size, NSColor *color, B
         styleMask:NSWindowStyleMaskTitled|NSWindowStyleMaskClosable|NSWindowStyleMaskResizable backing:NSBackingStoreBuffered defer:NO];
     if(!(self=[super initWithWindow:window])) return nil;
     _model=model;_samples=samples;_all=v::mistakes(*model,*samples);
-    window.title=@"Tunguska — Mistake Browser";window.minSize=NSMakeSize(960,620);window.releasedWhenClosed=NO;[window center];
+    window.title=@"Tunguska — Mistake Browser";TGConfigureWindow(window,@"MistakeBrowser",NSMakeSize(850,540));
     _kind=[[NSPopUpButton alloc] initWithFrame:NSZeroRect pullsDown:NO];[_kind addItemsWithTitles:@[@"Ternary mistakes",@"Any model's mistakes"]];
     _digit=[[NSPopUpButton alloc] initWithFrame:NSZeroRect pullsDown:NO];[_digit addItemWithTitle:@"All true digits"];
     for(int i=0;i<10;++i) [_digit addItemWithTitle:[NSString stringWithFormat:@"True digit %d",i]];
@@ -232,11 +222,9 @@ static void DrawText(NSString *s, NSPoint point, CGFloat size, NSColor *color, B
     [explanation.widthAnchor constraintEqualToConstant:350].active=YES;
     NSStackView *detail=Stack(@[Stack(@[_drawing,_effect]),_detail,_effectLabel,explanation,_open],YES);
     NSStackView *body=Stack(@[scroll,detail]);body.alignment=NSLayoutAttributeTop;body.spacing=24;
-    NSStackView *content=Stack(@[Text(@"EXPLORE THE MISTAKES",20,YES),filters,body,
-        Text(@"Raw top-choice errors before abstention. These historical test examples are diagnostic; do not use them to tune the model.",11)],YES);
-    content.translatesAutoresizingMaskIntoConstraints=NO;[window.contentView addSubview:content];
-    [NSLayoutConstraint activateConstraints:@[[content.topAnchor constraintEqualToAnchor:window.contentView.topAnchor constant:20],
-        [content.leadingAnchor constraintEqualToAnchor:window.contentView.leadingAnchor constant:20]]];
+    NSStackView *content=TGStack(@[filters,TGCard(body),
+        Text(@"Raw top-choice errors before abstention. These historical test examples are diagnostic; do not use them to tune the model.",11)],YES,20);
+    TGInstallPage(window,@"Mistake Browser",@"Compare missed digits and inspect how each pixel affects the score.",@"magnifyingglass",content,936);
     [self filter:nil];return self;
 }
 - (void)filter:(id)sender {
@@ -308,12 +296,12 @@ static void DrawText(NSString *s, NSPoint point, CGFloat size, NSColor *color, B
     NSMutableArray *_records;
 }
 - (instancetype)init {
-    NSWindow *window=[[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,1160,880)
+    NSWindow *window=[[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,1180,780)
         styleMask:NSWindowStyleMaskTitled|NSWindowStyleMaskClosable|NSWindowStyleMaskMiniaturizable|NSWindowStyleMaskResizable
         backing:NSBackingStoreBuffered defer:NO];
     if(!(self=[super initWithWindow:window])) return nil;
-    window.title=@"Tunguska — Ternary Vision Lab"; window.minSize=NSMakeSize(1140,850);
-    window.releasedWhenClosed=NO; window.delegate=self; [window center];
+    window.title=@"Tunguska — Vision Lab"; window.delegate=self;
+    TGConfigureWindow(window, @"VisionLab", NSMakeSize(980,600));
     NSString *resource=NSBundle.mainBundle.resourcePath;
     try {
         _samples=v::loadSamples([[resource stringByAppendingPathComponent:@"vision-digits.bin"] fileSystemRepresentation]);
@@ -322,10 +310,8 @@ static void DrawText(NSString *s, NSPoint point, CGFloat size, NSColor *color, B
         NSAlert *alert=[[NSAlert alloc] init]; alert.messageText=@"Vision Lab could not load";
         alert.informativeText=[NSString stringWithUTF8String:e.what()]; [alert runModal]; return nil;
     }
-    NSTextField *title=Text(@"TERNARY VISION LAB",22,YES);
-    NSTextField *subtitle=Text(@"Draw a digit. Follow 54 neurons. Watch a real ternary CPU recognize it.",13);
-    subtitle.textColor=NSColor.secondaryLabelColor;
-    _run=Button(@"Run inference",self,@selector(run:)); _run.keyEquivalent=@"\r";
+    _run=Button(@"Run inference",self,@selector(run:)); _run.keyEquivalent=@"\r"; TGPrimary(_run);
+    _run.toolTip=@"Recognize the current drawing or sample (Return).";
     _pause=Button(@"Pause",self,@selector(pause:));
     _cancel=Button(@"Cancel",self,@selector(cancel:));
     _export=Button(@"Export report…",self,@selector(exportReport:));
@@ -338,14 +324,16 @@ static void DrawText(NSString *s, NSPoint point, CGFloat size, NSColor *color, B
     [_canvas.widthAnchor constraintEqualToConstant:224].active=YES;
     [_canvas.heightAnchor constraintEqualToConstant:224].active=YES;
     _sampleLabel=Text(@"",12,YES);
-    NSStackView *samples=Stack(@[Button(@"Previous",self,@selector(previous:)),Button(@"Next sample",self,@selector(next:)),Button(@"Clear",self,@selector(clear:))]);
+    NSStackView *samples=Stack(@[TGButton(@"",@"chevron.left",self,@selector(previous:)),Button(@"Next sample",self,@selector(next:)),Button(@"Clear",self,@selector(clear:))]);
+    ((NSButton *)samples.arrangedSubviews[0]).accessibilityLabel=@"Previous sample";
+    ((NSButton *)samples.arrangedSubviews[0]).toolTip=@"Previous sample";
     NSTextField *drawing=Text(@"Drag to paint; right-drag to erase. Preview shows the exact input sent to all three models.",11);
     _normalize=[NSButton checkboxWithTitle:@"Center and resize drawings" target:self action:@selector(normalizeChanged:)];_normalize.state=NSControlStateValueOn;
     _preview=[[PixelPreview alloc] init];[_preview.widthAnchor constraintEqualToConstant:64].active=YES;[_preview.heightAnchor constraintEqualToConstant:64].active=YES;
     _preview.accessibilityElement=YES;_preview.accessibilityRole=NSAccessibilityImageRole;_preview.accessibilityLabel=@"Prepared model input";
     NSStackView *preprocessing=Stack(@[_preview,Text(@"Model input\nSamples keep their original pixels.",11)]);
     _baselineLabel=Text(@"",13);
-    NSStackView *left=Stack(@[Text(@"INPUT · 8 × 8",12,YES),_canvas,samples,_normalize,preprocessing,_sampleLabel,drawing,_baselineLabel],YES);
+    NSStackView *left=Stack(@[TGHeading(@"1. Draw or choose a digit"),_canvas,samples,_normalize,preprocessing,_sampleLabel,drawing,_baselineLabel],YES);
     [left.widthAnchor constraintEqualToConstant:266].active=YES;
     [drawing.widthAnchor constraintEqualToConstant:224].active=YES;
     [_sampleLabel.widthAnchor constraintEqualToConstant:224].active=YES;
@@ -359,20 +347,20 @@ static void DrawText(NSString *s, NSPoint point, CGFloat size, NSColor *color, B
     _neuronSelector.target=self; _neuronSelector.action=@selector(selectNeuron:);
     _neuronSelector.accessibilityLabel=@"Inspect hidden neuron";
     _neuron=Text(@"",11,YES); [_neuron.widthAnchor constraintEqualToConstant:468].active=YES;
-    NSStackView *middle=Stack(@[Text(@"HIDDEN LAYER · 54 WEIGHT MAPS",12,YES),_map,
+    NSStackView *middle=Stack(@[TGHeading(@"2. Inspect the 54 neurons"),_map,
         Stack(@[_neuronSelector,Text(@"Green +1   Orange −1   Dark 0",11)]),_neuron],YES);
     [middle.widthAnchor constraintEqualToConstant:468].active=YES;
 
-    _prediction=Text(@"Ready",32,YES);
+    _prediction=TGHeading(@"Ready",30);
     _scores=[[ScoreChart alloc] initWithFrame:NSZeroRect];
     [_scores.widthAnchor constraintEqualToConstant:228].active=YES; [_scores.heightAnchor constraintEqualToConstant:260].active=YES;
     _scores.accessibilityElement=YES; _scores.accessibilityRole=NSAccessibilityImageRole; _scores.accessibilityLabel=@"Ternary output scores";
     _runStatus=Text(@"",11,YES); [_runStatus.widthAnchor constraintEqualToConstant:228].active=YES;
-    NSStackView *right=Stack(@[Text(@"TERNARY PREDICTION",12,YES),_prediction,_scores,
+    NSStackView *right=Stack(@[TGHeading(@"3. Read the prediction"),_prediction,_scores,
         Text(@"Scores are relative, not probabilities.",11),_runStatus],YES);
     [right.widthAnchor constraintEqualToConstant:228].active=YES;
     NSStackView *body=Stack(@[left,middle,right]); body.spacing=24; body.alignment=NSLayoutAttributeTop;
-    [body.heightAnchor constraintEqualToConstant:530].active=YES;
+    [body.heightAnchor constraintGreaterThanOrEqualToConstant:510].active=YES;
 
     _count=[[NSPopUpButton alloc] initWithFrame:NSZeroRect pullsDown:NO];
     [_count addItemsWithTitles:@[@"First 100 held-out samples",@"All 1,797 held-out samples"]];
@@ -386,16 +374,14 @@ static void DrawText(NSString *s, NSPoint point, CGFloat size, NSColor *color, B
     NSStackView *benchmarkControls=Stack(@[Text(@"COMPARE",12,YES),_count,Button(@"Benchmark",self,@selector(benchmark:)),_progress]);
     NSTextField *credit=Text(@"UCI Optical Recognition of Handwritten Digits · E. Alpaydin & C. Kaynak · CC BY 4.0 · Full attribution in License and Credits",10);
     credit.textColor=NSColor.secondaryLabelColor;
-    NSStackView *content=Stack(@[title,subtitle,toolbar,body,benchmarkControls,_benchmarkStatus,_comparison,credit],YES);
-    content.spacing=12; content.translatesAutoresizingMaskIntoConstraints=NO;
-    [window.contentView addSubview:content];
-    [NSLayoutConstraint activateConstraints:@[
-        [content.leadingAnchor constraintEqualToAnchor:window.contentView.leadingAnchor constant:24],
-        [content.topAnchor constraintEqualToAnchor:window.contentView.topAnchor constant:20],
-        [content.trailingAnchor constraintLessThanOrEqualToAnchor:window.contentView.trailingAnchor constant:-24],
-        [content.bottomAnchor constraintLessThanOrEqualToAnchor:window.contentView.bottomAnchor constant:-16],
-        [_benchmarkStatus.widthAnchor constraintEqualToConstant:1060],[_comparison.widthAnchor constraintEqualToConstant:1060]
-    ]];
+    [_benchmarkStatus.widthAnchor constraintEqualToConstant:1060].active=YES;
+    [_comparison.widthAnchor constraintEqualToConstant:1060].active=YES;
+    NSView *inference = TGCard(body);
+    NSView *benchmark = TGSection(@"Compare model accuracy", Stack(@[benchmarkControls,_benchmarkStatus,_comparison],YES));
+    NSStackView *content=TGStack(@[toolbar,inference,benchmark,credit],YES,20);
+    [inference.widthAnchor constraintEqualToAnchor:content.widthAnchor].active=YES;
+    [benchmark.widthAnchor constraintEqualToAnchor:content.widthAnchor].active=YES;
+    TGInstallPage(window,@"Vision Lab",@"Draw a digit. Follow the neurons. Compare three ways to recognize it.",@"eye",content,1092);
     __weak VisionLab *weak=self;
     _canvas.changed=^{ [weak inputChanged]; };
     _map.selectedNeuron=^(int i){ [weak selectNeuronIndex:i]; };
@@ -510,6 +496,7 @@ static void DrawText(NSString *s, NSPoint point, CGFloat size, NSColor *color, B
     }
     [self refresh];
 }
+- (void)showDebugger:(id)sender { [self debug:sender]; }
 - (void)debug:(id)sender {
     if(_benchmark) [self cancel:nil];
     try {

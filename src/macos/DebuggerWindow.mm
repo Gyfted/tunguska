@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Independent Mac fork debugger, 2026-09-24.
 #import "DebuggerWindow.h"
+#import "Interface.h"
 #include "debugger.h"
 
 namespace dbg = tunguska::debugger;
 static NSString *String(const std::string& value) { return [NSString stringWithUTF8String:value.c_str()]; }
 static NSButton *Control(NSString *title, id target, SEL action) {
-    return [NSButton buttonWithTitle:title target:target action:action];
+    return TGButton(title,nil,target,action);
 }
 static NSTextField *Text(NSString *value, BOOL mono = NO) {
     NSTextField *view = [NSTextField labelWithString:value];
@@ -40,11 +41,9 @@ static NSStackView *Stack(NSArray<NSView *> *views, BOOL vertical = NO) {
         backing:NSBackingStoreBuffered defer:NO];
     if (!(self = [super initWithWindow:window])) return nil;
     window.title = @"Tunguska — Debugger";
-    window.minSize = NSMakeSize(1000, 620);
-    window.releasedWhenClosed = NO;
-    [window center];
+    TGConfigureWindow(window, @"Debugger", NSMakeSize(940, 580));
 
-    _run = Control(@"Pause", self, @selector(toggleRun:));
+    _run = TGButton(@"Pause", @"playpause", self, @selector(toggleRun:)); TGPrimary(_run);
     _state = Text(@"", YES);
     NSStackView *controls = Stack(@[_run, Control(@"Step", self, @selector(step:)), _state]);
     _registers = Text(@"", YES);
@@ -60,7 +59,7 @@ static NSStackView *Stack(NSArray<NSView *> *views, BOOL vertical = NO) {
     _follow.state = NSControlStateValueOn;
     NSStackView *navigation = Stack(@[Text(@"Address"), _address, Control(@"Go", self, @selector(go:)),
         Control(@"Go to PC", self, @selector(goToPC:)), _follow,
-        Control(@"Toggle Breakpoint at Address", self, @selector(toggleAddressBreakpoint:))]);
+        Control(@"Toggle breakpoint", self, @selector(toggleAddressBreakpoint:))]);
     _error = Text(@"Decimal: −265720…265720 · Nonary: DDD:DDD…444:444 (A=−1, B=−2, C=−3, D=−4)");
     _error.textColor = NSColor.secondaryLabelColor;
 
@@ -70,42 +69,42 @@ static NSStackView *Stack(NSArray<NSView *> *views, BOOL vertical = NO) {
     _memory = [self table:@[@[@"address", @"Address", @90], @[@"decimal", @"Decimal", @75],
         @[@"nonary", @"Nonary", @65], @[@"ternary", @"Trits", @85]] label:@"Read-only memory"];
     NSScrollView *codeScroll = [self scroll:_code], *memoryScroll = [self scroll:_memory];
-    NSStackView *codePane = Stack(@[Text(@"DISASSEMBLY · double-click a row to toggle its breakpoint"), codeScroll], YES);
-    NSStackView *memoryPane = Stack(@[Text(@"MEMORY · read only · trits shown most significant first"), memoryScroll], YES);
+    NSStackView *codePane = Stack(@[TGHeading(@"Disassembly"), codeScroll], YES);
+    NSStackView *memoryPane = Stack(@[TGHeading(@"Memory · read only"), memoryScroll], YES);
     for (NSScrollView *scroll in @[codeScroll, memoryScroll]) {
         [scroll.widthAnchor constraintEqualToAnchor:scroll.superview.widthAnchor].active = YES;
-        [scroll.heightAnchor constraintGreaterThanOrEqualToConstant:200].active = YES;
+        [scroll.heightAnchor constraintEqualToConstant:340].active = YES;
     }
     NSStackView *panes = Stack(@[codePane, memoryPane]);
     panes.alignment = NSLayoutAttributeTop;
-    [codePane.widthAnchor constraintEqualToAnchor:memoryPane.widthAnchor multiplier:1.5].active = YES;
+    [codePane.widthAnchor constraintEqualToAnchor:panes.widthAnchor multiplier:0.6 constant:-5].active = YES;
+    [memoryPane.widthAnchor constraintEqualToAnchor:panes.widthAnchor multiplier:0.4 constant:-5].active = YES;
     [codePane.heightAnchor constraintEqualToAnchor:memoryPane.heightAnchor].active = YES;
 
     _breakpoints = [[NSPopUpButton alloc] initWithFrame:NSZeroRect pullsDown:NO];
     _breakpoints.accessibilityLabel = @"Active breakpoints";
     _breakpoints.target = self; _breakpoints.action = @selector(showBreakpoint:);
     [_breakpoints.widthAnchor constraintEqualToConstant:160].active = YES;
-    NSStackView *breakpointControls = Stack(@[Control(@"Toggle Selected Breakpoint", self, @selector(toggleSelectedBreakpoint:)),
+    NSStackView *breakpointControls = Stack(@[Control(@"Toggle selected breakpoint", self, @selector(toggleSelectedBreakpoint:)),
         _breakpoints, Control(@"Remove", self, @selector(removeBreakpoint:)), Control(@"Clear All", self, @selector(clearBreakpoints:))]);
-    NSTextField *hint = Text(@"Stops before execution, including interrupt handlers. Continue passes the current breakpoint once. Reset clears breakpoints.");
+    NSTextField *hint = TGText(@"Double-click an instruction to toggle its breakpoint. Continue passes the current breakpoint once. Reset clears breakpoints. Memory trits are shown most significant first.",11);
     hint.textColor = NSColor.secondaryLabelColor;
 
-    NSStackView *root = Stack(@[controls, _registers, navigation, _error, panes, breakpointControls, hint], YES);
-    root.translatesAutoresizingMaskIntoConstraints = NO;
-    [window.contentView addSubview:root];
-    [NSLayoutConstraint activateConstraints:@[
-        [root.topAnchor constraintEqualToAnchor:window.contentView.topAnchor constant:20],
-        [root.leadingAnchor constraintEqualToAnchor:window.contentView.leadingAnchor constant:20],
-        [root.trailingAnchor constraintEqualToAnchor:window.contentView.trailingAnchor constant:-20],
-        [root.bottomAnchor constraintEqualToAnchor:window.contentView.bottomAnchor constant:-20],
-        [panes.widthAnchor constraintEqualToAnchor:root.widthAnchor]
-    ]];
+    NSView *cpuCard = TGCard(TGStack(@[controls, _registers], YES));
+    NSView *inspectCard = TGCard(TGStack(@[navigation, _error, panes, breakpointControls, hint], YES));
+    NSStackView *content = TGStack(@[cpuCard, inspectCard], YES, 20);
+    [cpuCard.widthAnchor constraintEqualToAnchor:content.widthAnchor].active = YES;
+    [inspectCard.widthAnchor constraintEqualToAnchor:content.widthAnchor].active = YES;
+    [panes.widthAnchor constraintEqualToAnchor:content.widthAnchor constant:-32].active = YES;
+    [hint.widthAnchor constraintEqualToAnchor:panes.widthAnchor].active = YES;
+    TGInstallPage(window, @"Debugger", @"Step through instructions, inspect memory and stop at breakpoints.", @"ant", content, 960);
     return self;
 }
 - (NSTableView *)table:(NSArray<NSArray *> *)columns label:(NSString *)label {
     NSTableView *table = [[NSTableView alloc] initWithFrame:NSZeroRect];
     table.usesAlternatingRowBackgroundColors = YES;
-    table.rowHeight = 24;
+    table.rowHeight = 28;
+    table.style = NSTableViewStyleFullWidth;
     table.allowsMultipleSelection = NO;
     table.accessibilityLabel = label;
     for (NSArray *entry in columns) {
@@ -121,7 +120,7 @@ static NSStackView *Stack(NSArray<NSView *> *views, BOOL vertical = NO) {
     NSScrollView *scroll = [[NSScrollView alloc] init];
     scroll.hasVerticalScroller = YES;
     scroll.hasHorizontalScroller = YES;
-    scroll.borderType = NSBezelBorder;
+    scroll.borderType = NSNoBorder;
     scroll.documentView = view;
     return scroll;
 }
@@ -160,6 +159,7 @@ static NSStackView *Stack(NSArray<NSView *> *views, BOOL vertical = NO) {
     auto& cpu = self.runtime->cpu();
     const int pc = self.runtime->programCounter();
     _run.title = self.runtime->running() ? @"Pause" : @"Continue";
+    _run.accessibilityLabel = _run.title;
     const auto hit = self.runtime->stoppedAtBreakpoint();
     _state.stringValue = hit ? [@"Breakpoint at " stringByAppendingString:String(dbg::formatAddress(*hit))]
         : self.runtime->running() ? @"Running · pause to inspect a stable state" : @"Paused";

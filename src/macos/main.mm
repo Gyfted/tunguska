@@ -6,24 +6,13 @@
 #import "ExplorerLab.h"
 #import "WeightLab.h"
 #import "FileAccess.h"
+#import "Interface.h"
 #include "runtime.h"
 #include <deque>
 
 static NSColor *RGB(unsigned rgb) {
     return [NSColor colorWithSRGBRed:((rgb >> 16) & 255)/255.0 green:((rgb >> 8) & 255)/255.0 blue:(rgb & 255)/255.0 alpha:1];
 }
-static NSTextField *Label(NSString *text, CGFloat size, NSColor *color, BOOL mono = NO) {
-    NSTextField *label = [NSTextField labelWithString:text];
-    label.font = mono ? [NSFont monospacedSystemFontOfSize:size weight:NSFontWeightRegular] : [NSFont systemFontOfSize:size];
-    label.textColor = color;
-    return label;
-}
-static NSButton *Button(NSString *title, id target, SEL action) {
-    NSButton *button = [NSButton buttonWithTitle:title target:target action:action];
-    button.bezelStyle = NSBezelStyleRounded;
-    return button;
-}
-
 @interface ScreenView : NSView
 @property(nonatomic, assign) tunguska::Runtime *runtime;
 @property(nonatomic, copy) void (^input)(NSString *);
@@ -150,7 +139,8 @@ static NSButton *Button(NSString *title, id target, SEL action) {
 @property(strong) WeightLab *weightLab;
 @property(strong) ScreenView *screen;
 @property(strong) NSButton *runButton;
-@property(strong) NSTextField *registers;
+@property(strong) NSButton *stepButton;
+@property(strong) NSMenu *appearanceMenu;
 @property(strong) NSTextField *status;
 @property(strong) NSTextField *metrics;
 @property(strong) NSTextField *mode;
@@ -168,91 +158,102 @@ static NSButton *Button(NSString *title, id target, SEL action) {
     [alert beginSheetModalForWindow:self.window completionHandler:nil];
 }
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
-    NSApp.appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
-    self.window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 1140, 750) styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable backing:NSBackingStoreBuffered defer:NO];
-    self.window.title = @"Tunguska — Ternary Computer";
-    self.window.minSize = NSMakeSize(920, 660);
-    self.window.backgroundColor = RGB(0x131C18);
+    [self applyAppearance];
+    self.window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 1160, 770) styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable backing:NSBackingStoreBuffered defer:NO];
+    self.window.title = @"Tunguska — Computer";
+    TGConfigureWindow(self.window, @"Computer", NSMakeSize(1000, 700));
     self.window.delegate = self;
     self.window.acceptsMouseMovedEvents = YES;
-    [self.window center];
-
     NSView *root = self.window.contentView;
-    NSStackView *header = [NSStackView stackViewWithViews:@[]];
-    header.orientation = NSUserInterfaceLayoutOrientationHorizontal;
-    header.spacing = 10;
-    NSTextField *title = Label(@"TUNGUSKA", 19, RGB(0xD8EEE2), YES);
-    title.font = [NSFont monospacedSystemFontOfSize:19 weight:NSFontWeightSemibold];
-    [header addArrangedSubview:title];
-    NSView *spacer = [[NSView alloc] init]; [header addArrangedSubview:spacer];
-    self.runButton = Button(@"Pause", self, @selector(toggleRun:));
-    [header addArrangedSubview:self.runButton];
-    [header addArrangedSubview:Button(@"Step", self, @selector(step:))];
-    [header addArrangedSubview:Button(@"Reset", self, @selector(reset:))];
-    [header addArrangedSubview:Button(@"Debugger", self, @selector(showDebugger:))];
-    [header addArrangedSubview:Button(@"Open Image…", self, @selector(openImage:))];
-    [spacer setContentHuggingPriority:1 forOrientation:NSLayoutConstraintOrientationHorizontal];
 
-    NSStackView *sidebar = [NSStackView stackViewWithViews:@[]];
-    sidebar.orientation = NSUserInterfaceLayoutOrientationVertical;
-    sidebar.alignment = NSLayoutAttributeLeading;
-    sidebar.spacing = 8;
-    [sidebar addArrangedSubview:Label(@"A computer in base three.", 14, RGB(0xA1B6A9))];
-    [sidebar addArrangedSubview:Label(@"MACHINE", 10, RGB(0x789686), YES)];
-    self.status = Label(@"●  Running", 14, RGB(0x8CDBAE));
-    [sidebar addArrangedSubview:self.status];
-    self.mode = Label(@"54 × 27 · Text mode", 12, RGB(0xA1B6A9));
-    [sidebar addArrangedSubview:self.mode];
-    [sidebar addArrangedSubview:Label(@"REGISTERS", 10, RGB(0x789686), YES)];
-    self.registers = Label(@"", 13, RGB(0xC6D7CD), YES);
-    self.registers.maximumNumberOfLines = 0;
-    [sidebar addArrangedSubview:self.registers];
-    [sidebar addArrangedSubview:Label(@"TRY A PROGRAM", 10, RGB(0x789686), YES)];
+    NSVisualEffectView *rail = [[NSVisualEffectView alloc] init];
+    rail.material = NSVisualEffectMaterialSidebar;
+    rail.blendingMode = NSVisualEffectBlendingModeBehindWindow;
+    NSStackView *sidebar = TGStack(@[], YES, 8);
+    NSTextField *tagline = TGText(@"Explore computing in base three.", 11);
+    tagline.textColor = NSColor.secondaryLabelColor;
+    [sidebar addArrangedSubview:TGHeading(@"Tunguska", 25)];
+    [sidebar addArrangedSubview:tagline];
+    [sidebar setCustomSpacing:24 afterView:tagline];
+    NSButton *computer = TGNavigation(@"Computer", @"The original ternary machine", @"desktopcomputer", self, @selector(showComputer:));
+    computer.state = NSControlStateValueOn;
+    [sidebar addArrangedSubview:computer];
+    [sidebar setCustomSpacing:20 afterView:computer];
+    [sidebar addArrangedSubview:TGHeading(@"Experiments", 11)];
+    [sidebar addArrangedSubview:TGNavigation(@"Vision Lab", @"Draw a digit. Inspect a network.", @"eye", self, @selector(showVisionLab:))];
+    [sidebar addArrangedSubview:TGNavigation(@"Explorer", @"Navigate an unknown world.", @"map", self, @selector(showExplorer:))];
+    NSButton *weights = TGNavigation(@"Weight Race", @"Memory and GPU speed.", @"chart.bar.xaxis", self, @selector(showWeightRace:));
+    [sidebar addArrangedSubview:weights]; [sidebar setCustomSpacing:20 afterView:weights];
+    [sidebar addArrangedSubview:TGHeading(@"Original programs", 11)];
     for (NSArray *entry in @[@[@"Command reference", @"HELP"], @[@"Character map", @"CHARMAP"], @[@"Vector random walk", @"BROWN"], @[@"Draw in 729 colors", @"RASTERDEMO729"]]) {
-        NSButton *button = Button(entry[0], self, @selector(example:));
-        button.identifier = entry[1];
-        button.toolTip = [NSString stringWithFormat:@"Boot the bundled system and run %@", entry[1]];
+        NSButton *button = TGButton(entry[0], @"play", self, @selector(example:));
+        button.identifier = entry[1]; button.alignment = NSTextAlignmentLeft;
+        button.toolTip = [NSString stringWithFormat:@"Starts a fresh system and runs %@. This resets memory and ejects the disk.", entry[1]];
         [sidebar addArrangedSubview:button];
     }
-    [sidebar addArrangedSubview:Button(@"Ternary Vision Lab", self, @selector(showVisionLab:))];
-    [sidebar addArrangedSubview:Button(@"Ternary Explorer", self, @selector(showExplorer:))];
-    [sidebar addArrangedSubview:Button(@"Weight Race", self, @selector(showWeightRace:))];
-    [sidebar addArrangedSubview:Label(@"IMAGE", 10, RGB(0x789686), YES)];
-    self.imageLabel = Label(@"Original Tunguska OS", 12, RGB(0xA1B6A9));
-    self.imageLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
-    [sidebar addArrangedSubview:self.imageLabel];
-    [sidebar addArrangedSubview:Button(@"Mount Disk…", self, @selector(mountDisk:))];
-    self.diskLabel = Label(@"No disk mounted", 11, RGB(0x789686));
-    self.diskLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
-    [sidebar addArrangedSubview:self.diskLabel];
+    NSTextField *credit = TGText(@"Created by Viktor Lofgren\nMac revival by Vinny Lingham", 10);
+    credit.textColor = NSColor.secondaryLabelColor;
+    NSButton *license = TGButton(@"License & credits", nil, self, @selector(showLicense:));
+    license.bordered = NO; license.alignment = NSTextAlignmentLeft; license.font = [NSFont systemFontOfSize:11];
+    NSStackView *credits = TGStack(@[credit, license], YES, 4);
+    for (NSView *view in sidebar.arrangedSubviews) [view.widthAnchor constraintEqualToAnchor:sidebar.widthAnchor].active = YES;
 
+    self.status = TGHeading(@"Running", 13);
+    self.mode = TGText(@"54 × 27 · Text mode", 12); self.mode.textColor = NSColor.secondaryLabelColor;
+    NSStackView *machineTitle = TGStack(@[TGHeading(@"Ternary computer", 24), self.mode], YES, 4);
+    [machineTitle setContentHuggingPriority:1 forOrientation:NSLayoutConstraintOrientationHorizontal];
+    self.runButton = TGButton(@"Pause", @"pause.fill", self, @selector(toggleRun:));
+    TGPrimary(self.runButton);
+    self.runButton.toolTip = @"Run or pause the computer (⌘P).";
+    self.stepButton = TGButton(@"Step", @"forward.frame", self, @selector(step:));
+    self.stepButton.toolTip = @"Execute one instruction and pause (⌘.).";
+    NSButton *debug = TGButton(@"Debugger", @"ant", self, @selector(showDebugger:));
+    debug.toolTip = @"Inspect instructions, memory and breakpoints (⌘D).";
+    NSStackView *header = TGStack(@[machineTitle, TGSpacer(), self.runButton, self.stepButton, debug], NO, 10);
+    NSButton *reset = TGButton(@"Reset", @"arrow.counterclockwise", self, @selector(reset:));
+    reset.toolTip = @"Reload the current image, reset memory and eject the disk (⌘R).";
+    NSStackView *state = TGStack(@[self.status, TGText(@"−1   0   +1", 12, YES)]);
     self.screen = [[ScreenView alloc] initWithFrame:NSZeroRect];
     __weak AppDelegate *weakSelf = self;
     self.screen.input = ^(NSString *text) { [weakSelf enqueue:text]; };
-    self.metrics = Label(@"Starting…", 11, RGB(0x789686), YES);
-    NSTextField *hint = Label(@"Click the display to type  ·  HELP lists commands  ·  Esc sends Break  ·  ⌘V pastes", 11, RGB(0x8FA999));
-    for (NSView *view in @[header, sidebar, self.screen, self.metrics, hint]) {
+    NSTextField *hint = TGText(@"Click the display to type · HELP lists commands · Esc sends Break · ⌘V pastes", 11);
+    hint.textColor = NSColor.secondaryLabelColor;
+    self.imageLabel = TGText(@"Original Tunguska OS", 12);
+    self.diskLabel = TGText(@"No disk mounted", 12);
+    for (NSTextField *label in @[self.imageLabel, self.diskLabel]) {
+        label.maximumNumberOfLines = 1; label.lineBreakMode = NSLineBreakByTruncatingMiddle;
+        [label setContentCompressionResistancePriority:500 forOrientation:NSLayoutConstraintOrientationHorizontal];
+    }
+    NSStackView *image = TGStack(@[TGHeading(@"System", 11), self.imageLabel], YES, 4);
+    NSStackView *disk = TGStack(@[TGHeading(@"Virtual disk", 11), self.diskLabel], YES, 4);
+    NSStackView *storage = TGStack(@[image, TGButton(@"Open…", @"folder", self, @selector(openImage:)), reset,
+        disk, TGButton(@"Mount…", @"externaldrive", self, @selector(mountDisk:))], NO, 16);
+    [image.widthAnchor constraintEqualToAnchor:disk.widthAnchor].active = YES;
+    NSView *storageCard = TGCard(storage, 14);
+    self.metrics = TGText(@"Starting…", 10, YES); self.metrics.textColor = NSColor.secondaryLabelColor;
+    self.metrics.maximumNumberOfLines = 1; self.metrics.lineBreakMode = NSLineBreakByTruncatingTail;
+    for (NSView *view in @[rail, header, state, self.screen, hint, storageCard, self.metrics]) {
         view.translatesAutoresizingMaskIntoConstraints = NO; [root addSubview:view];
     }
+    for (NSView *view in @[sidebar, credits]) { view.translatesAutoresizingMaskIntoConstraints = NO; [rail addSubview:view]; }
     [NSLayoutConstraint activateConstraints:@[
+        [rail.leadingAnchor constraintEqualToAnchor:root.leadingAnchor], [rail.topAnchor constraintEqualToAnchor:root.topAnchor],
+        [rail.bottomAnchor constraintEqualToAnchor:root.bottomAnchor], [rail.widthAnchor constraintEqualToConstant:258],
+        [sidebar.leadingAnchor constraintEqualToAnchor:rail.leadingAnchor constant:16], [sidebar.trailingAnchor constraintEqualToAnchor:rail.trailingAnchor constant:-16],
+        [sidebar.topAnchor constraintEqualToAnchor:rail.topAnchor constant:20],
+        [credits.leadingAnchor constraintEqualToAnchor:sidebar.leadingAnchor constant:8], [credits.bottomAnchor constraintEqualToAnchor:rail.bottomAnchor constant:-16],
+        [credits.topAnchor constraintGreaterThanOrEqualToAnchor:sidebar.bottomAnchor constant:16],
+        [header.leadingAnchor constraintEqualToAnchor:rail.trailingAnchor constant:24], [header.trailingAnchor constraintEqualToAnchor:root.trailingAnchor constant:-24],
         [header.topAnchor constraintEqualToAnchor:root.topAnchor constant:20],
-        [header.leadingAnchor constraintEqualToAnchor:root.leadingAnchor constant:24],
-        [header.trailingAnchor constraintEqualToAnchor:root.trailingAnchor constant:-24],
-        [header.heightAnchor constraintEqualToConstant:34],
-        [sidebar.topAnchor constraintEqualToAnchor:header.bottomAnchor constant:24],
-        [sidebar.leadingAnchor constraintEqualToAnchor:root.leadingAnchor constant:24],
-        [sidebar.widthAnchor constraintEqualToConstant:220],
-        [sidebar.bottomAnchor constraintLessThanOrEqualToAnchor:self.metrics.topAnchor constant:-12],
-        [self.screen.topAnchor constraintEqualToAnchor:sidebar.topAnchor],
-        [self.screen.leadingAnchor constraintEqualToAnchor:sidebar.trailingAnchor constant:24],
-        [self.screen.trailingAnchor constraintEqualToAnchor:root.trailingAnchor constant:-24],
-        [self.screen.bottomAnchor constraintEqualToAnchor:hint.topAnchor constant:-14],
-        [hint.leadingAnchor constraintEqualToAnchor:self.screen.leadingAnchor constant:4],
-        [hint.bottomAnchor constraintEqualToAnchor:self.metrics.topAnchor constant:-12],
-        [self.metrics.leadingAnchor constraintEqualToAnchor:root.leadingAnchor constant:24],
-        [self.metrics.bottomAnchor constraintEqualToAnchor:root.bottomAnchor constant:-16],
-        [self.imageLabel.widthAnchor constraintLessThanOrEqualToConstant:215],
-        [self.diskLabel.widthAnchor constraintLessThanOrEqualToConstant:215]
+        [state.leadingAnchor constraintEqualToAnchor:header.leadingAnchor], [state.topAnchor constraintEqualToAnchor:header.bottomAnchor constant:20],
+        [self.screen.leadingAnchor constraintEqualToAnchor:header.leadingAnchor], [self.screen.trailingAnchor constraintEqualToAnchor:header.trailingAnchor],
+        [self.screen.topAnchor constraintEqualToAnchor:state.bottomAnchor constant:12], [self.screen.bottomAnchor constraintEqualToAnchor:hint.topAnchor constant:-12],
+        [hint.leadingAnchor constraintEqualToAnchor:header.leadingAnchor], [hint.trailingAnchor constraintEqualToAnchor:header.trailingAnchor],
+        [hint.bottomAnchor constraintEqualToAnchor:storageCard.topAnchor constant:-16],
+        [storageCard.leadingAnchor constraintEqualToAnchor:header.leadingAnchor], [storageCard.trailingAnchor constraintEqualToAnchor:header.trailingAnchor],
+        [storageCard.bottomAnchor constraintEqualToAnchor:self.metrics.topAnchor constant:-14],
+        [self.metrics.leadingAnchor constraintEqualToAnchor:header.leadingAnchor], [self.metrics.trailingAnchor constraintEqualToAnchor:header.trailingAnchor],
+        [self.metrics.bottomAnchor constraintEqualToAnchor:root.bottomAnchor constant:-16]
     ]];
     [self setupMenu];
     [self.window makeKeyAndOrderFront:nil];
@@ -272,13 +273,14 @@ static NSButton *Button(NSString *title, id target, SEL action) {
     [appMenu addItemWithTitle:@"Quit Tunguska" action:@selector(terminate:) keyEquivalent:@"q"];
     NSMenuItem *file = [[NSMenuItem alloc] init]; [bar addItem:file];
     file.submenu = [[NSMenu alloc] initWithTitle:@"File"];
+    [file.submenu addItemWithTitle:@"Close Window" action:@selector(performClose:) keyEquivalent:@"w"];
     [file.submenu addItemWithTitle:@"Open Memory Image…" action:@selector(openImage:) keyEquivalent:@"o"];
     [file.submenu addItemWithTitle:@"Mount Disk…" action:@selector(mountDisk:) keyEquivalent:@"m"];
     [file.submenu addItemWithTitle:@"Save Disk As…" action:@selector(saveDisk:) keyEquivalent:@"s"];
     [file.submenu addItemWithTitle:@"Eject Disk" action:@selector(ejectDisk:) keyEquivalent:@""];
     NSMenuItem *edit = [[NSMenuItem alloc] init]; [bar addItem:edit];
     edit.submenu = [[NSMenu alloc] initWithTitle:@"Edit"];
-    [edit.submenu addItemWithTitle:@"Copy Display" action:@selector(copy:) keyEquivalent:@"c"];
+    [edit.submenu addItemWithTitle:@"Copy" action:@selector(copy:) keyEquivalent:@"c"];
     [edit.submenu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
     NSMenuItem *machine = [[NSMenuItem alloc] init]; [bar addItem:machine];
     machine.submenu = [[NSMenu alloc] initWithTitle:@"Machine"];
@@ -292,10 +294,51 @@ static NSButton *Button(NSString *title, id target, SEL action) {
     [machine.submenu addItemWithTitle:@"Ternary Vision Lab" action:@selector(showVisionLab:) keyEquivalent:@"l"];
     [machine.submenu addItemWithTitle:@"Ternary Explorer" action:@selector(showExplorer:) keyEquivalent:@"e"];
     [machine.submenu addItemWithTitle:@"Weight Race" action:@selector(showWeightRace:) keyEquivalent:@"g"];
+    NSMenuItem *view = [[NSMenuItem alloc] init]; [bar addItem:view];
+    view.submenu = [[NSMenu alloc] initWithTitle:@"View"];
+    [view.submenu addItemWithTitle:@"Computer" action:@selector(showComputer:) keyEquivalent:@"1"];
+    [view.submenu addItemWithTitle:@"Vision Lab" action:@selector(showVisionLab:) keyEquivalent:@"2"];
+    [view.submenu addItemWithTitle:@"Explorer" action:@selector(showExplorer:) keyEquivalent:@"3"];
+    [view.submenu addItemWithTitle:@"Weight Race" action:@selector(showWeightRace:) keyEquivalent:@"4"];
+    [view.submenu addItem:NSMenuItem.separatorItem];
+    NSMenuItem *appearance = [view.submenu addItemWithTitle:@"Appearance" action:nil keyEquivalent:@""];
+    self.appearanceMenu = [[NSMenu alloc] initWithTitle:@"Appearance"]; appearance.submenu = self.appearanceMenu;
+    for (NSString *name in @[@"System", @"Light", @"Dark"]) {
+        NSMenuItem *item = [self.appearanceMenu addItemWithTitle:name action:@selector(changeAppearance:) keyEquivalent:@""];
+        item.representedObject = name;
+    }
+    [self applyAppearance];
+    NSMenuItem *windows = [[NSMenuItem alloc] init]; [bar addItem:windows];
+    windows.submenu = [[NSMenu alloc] initWithTitle:@"Window"];
+    [windows.submenu addItemWithTitle:@"Minimize" action:@selector(performMiniaturize:) keyEquivalent:@""];
+    [windows.submenu addItemWithTitle:@"Zoom" action:@selector(performZoom:) keyEquivalent:@""];
+    [windows.submenu addItem:NSMenuItem.separatorItem];
+    [windows.submenu addItemWithTitle:@"Bring All to Front" action:@selector(arrangeInFront:) keyEquivalent:@""];
+    NSApp.windowsMenu = windows.submenu;
     NSApp.mainMenu = bar;
 }
+- (void)applyAppearance {
+    NSString *name = [NSUserDefaults.standardUserDefaults stringForKey:@"InterfaceAppearance"] ?: @"System";
+    NSApp.appearance = [name isEqual:@"Dark"] ? [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua]
+        : [name isEqual:@"Light"] ? [NSAppearance appearanceNamed:NSAppearanceNameAqua] : nil;
+    for (NSMenuItem *item in self.appearanceMenu.itemArray) item.state = [item.representedObject isEqual:name] ? NSControlStateValueOn : NSControlStateValueOff;
+}
+- (void)changeAppearance:(NSMenuItem *)sender {
+    [NSUserDefaults.standardUserDefaults setObject:sender.representedObject forKey:@"InterfaceAppearance"];
+    [self applyAppearance];
+}
+- (void)showComputer:(id)sender { [self.window makeKeyAndOrderFront:sender]; [self.window makeFirstResponder:self.screen]; }
+- (BOOL)applicationShouldHandleReopen:(NSApplication *)app hasVisibleWindows:(BOOL)visible { [self showComputer:nil]; return YES; }
+- (BOOL)validateMenuItem:(NSMenuItem *)item {
+    SEL action = item.action;
+    if (action == @selector(toggleRun:) || action == @selector(step:) || action == @selector(reset:) ||
+        action == @selector(sendBreak:) || action == @selector(showDebugger:) || action == @selector(openImage:) || action == @selector(mountDisk:) ||
+        action == @selector(saveDisk:) || action == @selector(ejectDisk:) || action == @selector(bootOriginal:) || action == @selector(boot3CC:))
+        return NSApp.keyWindow == self.window;
+    return YES;
+}
 - (void)loadImage:(NSURL *)url {
-    if (!url) { [self showError:@"The bundled boot image is missing. Run make app again."]; return; }
+    if (!url) { [self showError:@"The bundled operating system is missing. Reinstall Tunguska or open a valid memory image."]; return; }
     try {
         auto access = std::make_unique<tunguska::macos::ScopedURL>(url);
         if (_runtime) _runtime->reset(url.fileSystemRepresentation);
@@ -338,15 +381,16 @@ static NSButton *Button(NSString *title, id target, SEL action) {
 }
 - (void)updateStats {
     if (!_runtime) return;
-    auto& c = _runtime->cpu();
     const double elapsed = MAX(0.001, NSDate.timeIntervalSinceReferenceDate - _lastStats);
     const double rate = (_runtime->cycles() - _lastCycles)/elapsed;
     _lastCycles = _runtime->cycles(); _lastStats = NSDate.timeIntervalSinceReferenceDate;
     self.status.stringValue = _runtime->stoppedAtBreakpoint() ? @"◉  Breakpoint" : _runtime->running() ? @"●  Running" : @"◉  Paused";
     self.runButton.title = _runtime->running() ? @"Pause" : @"Run";
+    self.runButton.image = [NSImage imageWithSystemSymbolName:_runtime->running() ? @"pause.fill" : @"play.fill" accessibilityDescription:nil];
+    self.runButton.accessibilityLabel = self.runButton.title;
+    self.status.textColor = _runtime->running() ? NSColor.systemGreenColor : NSColor.secondaryLabelColor;
     self.mode.stringValue = _runtime->frame().mode == 0 ? @"54 × 27 · Text mode" : _runtime->frame().mode == 1 ? @"Vector graphics" : _runtime->frame().auxiliary == 1 ? @"324 × 243 · 3 colors" : @"324 × 243 · 729 colors";
-    self.registers.stringValue = [NSString stringWithFormat:@"PC   %03X:%03X\nA    %4d   X  %4d\nY    %4d   S  %4d\nP    %4d   CL %4d", c.PCH.nonaryhex(), c.PCL.nonaryhex(), c.A.to_int(), c.X.to_int(), c.Y.to_int(), c.S.to_int(), c.P.to_int(), c.CL.to_int()];
-    self.metrics.stringValue = [NSString stringWithFormat:@"6 TRITS / TRYTE    ·    531,441 TRYTE MEMORY    ·    %.0f K INSTRUCTIONS/S    ·    %llu EXECUTED", rate/1000, (unsigned long long)_runtime->cycles()];
+    self.metrics.stringValue = [NSString stringWithFormat:@"531,441 trytes · 6 trits per tryte · %.0f K instructions/s · %llu executed", rate/1000, (unsigned long long)_runtime->cycles()];
     [self.debugger refresh];
 }
 - (void)showVisionLab:(id)sender {
@@ -432,7 +476,7 @@ static NSButton *Button(NSString *title, id target, SEL action) {
         for (NSString *name in @[@"AUTHORS", @"NOTICE.md", @"VISION-NOTICE.md", @"LICENSE"]) {
             NSString *path = [NSBundle.mainBundle.resourcePath stringByAppendingPathComponent:name];
             NSString *text = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil];
-            if (!text) { [self showError:@"A bundled license or attribution file is missing. Please rebuild the app."]; return; }
+            if (!text) { [self showError:@"A bundled license or attribution file is missing. Please reinstall Tunguska to restore it."]; return; }
             [contents appendFormat:@"%@\n\n%@\n\n", name, text];
         }
         self.licenseWindow = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 740, 600) styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskResizable backing:NSBackingStoreBuffered defer:NO];
@@ -455,6 +499,7 @@ static NSButton *Button(NSString *title, id target, SEL action) {
     }
     [self.licenseWindow makeKeyAndOrderFront:nil];
 }
+- (BOOL)applicationSupportsSecureRestorableState:(NSApplication *)sender { return YES; }
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender { return YES; }
 @end
 

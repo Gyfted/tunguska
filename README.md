@@ -19,10 +19,12 @@ open build/Tunguska.app
 
 Requires Apple’s Xcode Command Line Tools (`xcode-select --install`). No Homebrew packages, SDL, or other downloads are required to build. The local build is native **arm64**, tested on Apple Silicon with macOS 27. The deployment target is macOS 12; older systems and Intel Macs have not been runtime-tested. The release script also builds a universal app with arm64 and x86_64 slices. The app enables **App Sandbox and hardened runtime**, but is locally ad-hoc signed and not notarized for distribution. This repository publishes source; it does not yet offer an official binary release.
 
-Click the display and type `HELP`, then Return. Commands are uppercase. The sidebar also launches the original demos. A demo button boots a fresh bundled system before entering its command; Reset reloads the current image and clears the virtual disk.
+Click the display and type `HELP`, then Return. Commands are uppercase. The sidebar separates the computer, three experiments, and original demos. Use **View → Appearance** for System, Light, or Dark mode. Lab pages scroll to keep controls reachable in smaller windows; window sizes and your appearance choice are remembered. A demo button boots a fresh bundled system before entering its command; Reset reloads the current image and clears the virtual disk.
 
 | Control | Action |
 | --- | --- |
+| Computer, ⌘1 | Return to the original machine without resetting it |
+| Vision Lab / Explorer / Weight Race, ⌘2 / ⌘3 / ⌘4 | Switch experiments; the existing ⌘L / ⌘E / ⌘G shortcuts also work |
 | Run / Pause, ⌘P | Start or stop the processor |
 | Step, ⌘. | Execute one instruction, leaving the machine paused |
 | Debugger, ⌘D | Pause and open disassembly, breakpoints, registers and memory |
@@ -37,13 +39,15 @@ Click the display and type `HELP`, then Return. Commands are uppercase. The side
 | Mount Disk, ⌘M | Attach a virtual floppy image |
 | Save Disk As, ⌘S | Export the current virtual floppy |
 
+Opening a lab pauses the original machine. Use the **Computer** button or ⌘1 to return, then **Run** to resume. Machine and file commands apply to the active computer window; debugger Run/Step commands target that debugger. See [the interface guide](docs/INTERFACE.md) for navigation and shortcuts.
+
 The guest’s `LOAD` command no longer opens host paths. Use **Mount Disk**, then `FDSTAT` or `RUN` in the guest. Guest disk writes stay in memory; use **Save Disk As** to persist them. The app uses macOS-coordinated replacement files for atomic saves without requesting access to the enclosing folder. Symbolic-link destinations are rejected. Disk images and memory images contain the same complete 531,441-tryte storage format, but are loaded into different devices.
 
 The app requests only App Sandbox and user-selected file read/write access. There are no network, camera, microphone, broad-folder, JIT or hardened-runtime-exception entitlements. Open and Save dialogs authorize individual files; the current memory image's URL is retained so Reset can reopen it. No persistent file bookmarks are stored. The developer CLI, assembler and 3CC compiler are separate, unsandboxed tools and are not included in the distributed app.
 
 ## Inspect and debug
 
-Open **Debugger** (⌘D) to pause execution. Inspect instructions and registers, use **Step** to execute one instruction, or **Continue** to run. Double-click an instruction to toggle its breakpoint, or enter an address and choose **Toggle Breakpoint at Address**. Continue passes the breakpoint you just hit once, so loops stop again on the next visit. Breakpoints also catch interrupt handlers before their first instruction.
+Open **Debugger** (⌘D) to pause execution. Inspect instructions and registers, use **Step** to execute one instruction, or **Continue** to run. Double-click an instruction to toggle its breakpoint, or enter an address and choose **Toggle breakpoint**. Continue passes the breakpoint you just hit once, so loops stop again on the next visit. Breakpoints also catch interrupt handlers before their first instruction.
 
 The memory inspector shows decimal, balanced nonary, and all six trits. Enter a decimal address such as `198697`, or a nonary address such as `333:D04`, then **Go**. **Follow PC** follows execution in the disassembly while the memory view stays at your chosen address. Reset or loading another image clears breakpoints. See [the debugger guide](docs/DEBUGGING.md) for a walkthrough and limitations.
 
@@ -93,7 +97,7 @@ matrix-vector calculation with FP16 weights, packed two-bit ternary weights,
 and Apple's MPS matrix library as an additional FP16 baseline. Every output is
 checked against an independent exact reference. Weight-memory bars, GPU timings,
 sample ranges and JSON exports separate the guaranteed 8× smaller weight buffers
-from any measured speed benefit. Small layers may see no benefit.
+from any measured speed benefit. Select a completed layer in the results table or the selector above the charts to revisit it. Small layers may see no benefit.
 
 This is native Metal execution on binary hardware, separate from the guest CPU.
 It tests a synthetic layer with already-ternary weights, not trained-model

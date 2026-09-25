@@ -9,7 +9,7 @@ output. All inspection is read only; breakpoints do not patch guest memory.
 1. Start the bundled OS and click **Debugger**, or press **⌘D**. Opening the
    debugger pauses the processor. The green arrow marks the next instruction.
 2. Click **Go to PC** to put the current address into the address field and
-   align both views with it. Click **Toggle Breakpoint at Address**.
+   align both views with it. Click **Toggle breakpoint**.
 3. Click **Continue**. If no interrupt redirects execution first, the machine
    stops at that address before executing it, with no instruction-count change.
 4. Click **Step**. Exactly one instruction runs, leaving the machine paused.

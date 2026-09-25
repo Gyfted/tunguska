@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Independent native Ternary Explorer, 2026-09-24. Original emulator: Viktor Lofgren.
 #import "ExplorerLab.h"
+#import "Interface.h"
 #import "DebuggerWindow.h"
 #import "FileAccess.h"
 #include "explorer.h"
@@ -10,10 +11,7 @@ namespace ex=tunguska::explorer;
 static NSColor *Color(unsigned rgb) {
     return [NSColor colorWithSRGBRed:((rgb>>16)&255)/255.0 green:((rgb>>8)&255)/255.0 blue:(rgb&255)/255.0 alpha:1];
 }
-static NSTextField *Text(NSString *s,CGFloat size=12,BOOL mono=NO) {
-    NSTextField *t=[NSTextField wrappingLabelWithString:s];t.selectable=YES;
-    t.font=mono?[NSFont monospacedSystemFontOfSize:size weight:NSFontWeightRegular]:[NSFont systemFontOfSize:size];return t;
-}
+static NSTextField *Text(NSString *s,CGFloat size=12,BOOL mono=NO) { return TGText(s,size,mono); }
 static NSString *String(const std::string& s){return [NSString stringWithUTF8String:s.c_str()];}
 static NSString *ReasonName(ex::Reason reason) {
     switch(reason) {
@@ -30,11 +28,8 @@ static NSString *ReasonName(ex::Reason reason) {
     }
     return @"unknown";
 }
-static NSStackView *Stack(NSArray<NSView*> *views,BOOL vertical=NO) {
-    NSStackView *s=[NSStackView stackViewWithViews:views];s.orientation=vertical?NSUserInterfaceLayoutOrientationVertical:NSUserInterfaceLayoutOrientationHorizontal;
-    s.alignment=vertical?NSLayoutAttributeLeading:NSLayoutAttributeCenterY;s.spacing=10;return s;
-}
-static NSButton *Button(NSString *title,id target,SEL action){return [NSButton buttonWithTitle:title target:target action:action];}
+static NSStackView *Stack(NSArray<NSView*> *views,BOOL vertical=NO) { return TGStack(views,vertical,10); }
+static NSButton *Button(NSString *title,id target,SEL action){return TGButton(title,nil,target,action);}
 static void Draw(NSString *s,NSRect rect,CGFloat size,NSColor *color) {
     NSMutableParagraphStyle *paragraph=[[NSMutableParagraphStyle alloc] init];paragraph.alignment=NSTextAlignmentCenter;
     [s drawInRect:rect withAttributes:@{NSFontAttributeName:[NSFont monospacedSystemFontOfSize:size weight:NSFontWeightSemibold],NSForegroundColorAttributeName:color,NSParagraphStyleAttributeName:paragraph}];
@@ -118,40 +113,43 @@ static void Draw(NSString *s,NSRect rect,CGFloat size,NSColor *color) {
     NSPopUpButton *p=[[NSPopUpButton alloc] initWithFrame:NSZeroRect pullsDown:NO];[p addItemsWithTitles:titles];p.accessibilityLabel=label;p.target=self;p.action=action;return p;
 }
 - (instancetype)init {
-    NSWindow *window=[[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,1160,850)
+    NSWindow *window=[[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,1180,780)
         styleMask:NSWindowStyleMaskTitled|NSWindowStyleMaskClosable|NSWindowStyleMaskMiniaturizable|NSWindowStyleMaskResizable backing:NSBackingStoreBuffered defer:NO];
     if(!(self=[super initWithWindow:window]))return nil;
-    window.title=@"Tunguska — Ternary Explorer";window.minSize=NSMakeSize(1120,820);window.delegate=self;window.releasedWhenClosed=NO;[window center];_seed=729;
+    window.title=@"Tunguska — Explorer";window.delegate=self;TGConfigureWindow(window,@"Explorer",NSMakeSize(980,600));_seed=729;
     try{_session=std::make_unique<ex::Session>([[NSBundle.mainBundle pathForResource:@"explorer" ofType:@"ternobj"] fileSystemRepresentation]);}
     catch(const std::exception& error){NSAlert *alert=[[NSAlert alloc] init];alert.messageText=@"Explorer could not load";alert.informativeText=String(error.what());[alert runModal];return nil;}
     _preset=[self popup:@[@"Switchback",@"Open rooms",@"Seeded maze"] label:@"World preset" action:@selector(presetChanged:)];
     _newMaze=Button(@"New maze",self,@selector(newMaze:));
-    _run=Button(@"Run",self,@selector(run:));_step=Button(@"Step turn",self,@selector(stepTurn:));
+    _run=TGButton(@"Run",@"play.fill",self,@selector(run:));TGPrimary(_run);_step=Button(@"Step turn",self,@selector(stepTurn:));
     _debug=Button(@"Debug brain",self,@selector(debugBrain:));_export=Button(@"Export mission…",self,@selector(exportMission:));
     NSStackView *toolbar=Stack(@[_preset,_newMaze,Button(@"Restart / recharge",self,@selector(restart:)),_run,_step,_debug,_export]);
     _policy=[self popup:@[@"Reach goal",@"Explore first"] label:@"Mission priority" action:@selector(optionsChanged:)];
     _sensors=[self popup:@[@"Reliable scans",@"Intermittent scans"] label:@"Sensor reliability" action:@selector(optionsChanged:)];
     _battery=[self popup:@[@"80 energy",@"360 energy",@"999 energy"] label:@"Battery capacity" action:@selector(optionsChanged:)];[_battery selectItemAtIndex:1];
     _brush=[self popup:@[@"Toggle wall",@"Move base",@"Move goal"] label:@"Map editing tool" action:@selector(brushChanged:)];
-    NSStackView *settings=Stack(@[Text(@"PRIORITY",10,YES),_policy,_sensors,_battery,Text(@"EDIT",10,YES),_brush]);
+    NSStackView *settings=Stack(@[TGHeading(@"Priority",11),_policy,_sensors,_battery,TGHeading(@"Edit map",11),_brush]);
     _world=[[ExplorerMap alloc] init];_belief=[[ExplorerMap alloc] init];_belief.belief=YES;
     _world.simulation=_belief.simulation=&_simulation;
     _world.accessibilityLabel=@"Editable real world";_world.accessibilityHelp=@"Click a cell to use the selected editing tool. Arrow keys select a cell; Space edits it. B is base, G is goal, R is robot.";
     _belief.accessibilityLabel=@"Robot knowledge: blocked minus one, unknown zero, clear plus one";
     _selection=Text(@"",11);[_selection.widthAnchor constraintEqualToConstant:360].active=YES;
-    NSStackView *actual=Stack(@[Text(@"THE WORLD",13,YES),_world,_selection],YES);
+    NSStackView *actual=Stack(@[TGHeading(@"The world · editable"),_world,_selection],YES);
     NSTextField *legend=Text(@"−1 blocked    0 unknown    +1 clear\nGold: planned route · Dots: traveled route",11,YES);[legend.widthAnchor constraintEqualToConstant:360].active=YES;
-    NSStackView *known=Stack(@[Text(@"WHAT THE ROBOT KNOWS",13,YES),_belief,legend],YES);
-    _headline=Text(@"Ready",24,YES);_metrics=Text(@"",13,YES);_reason=Text(@"",14);_brain=Text(@"",11,YES);
+    NSStackView *known=Stack(@[TGHeading(@"What the robot knows"),_belief,legend],YES);
+    _headline=TGHeading(@"Ready",24);_metrics=Text(@"",13,YES);_reason=Text(@"",14);_brain=Text(@"",11,YES);
     for(NSTextField *label in @[_headline,_metrics,_reason,_brain])[label.widthAnchor constraintEqualToConstant:300].active=YES;
     NSTextField *rules=Text(@"Each scan costs 1 energy; each move costs 1. Sensors see up to two cells in each direction and stop at walls. Missing readings never become clear cells.",12);[rules.widthAnchor constraintEqualToConstant:300].active=YES;
     NSStackView *dashboard=Stack(@[_headline,_metrics,_reason,_brain,rules],YES);dashboard.spacing=16;
     NSStackView *body=Stack(@[actual,known,dashboard]);body.alignment=NSLayoutAttributeTop;body.spacing=22;
     _history=Text(@"",11,YES);[_history.widthAnchor constraintEqualToConstant:1060].active=YES;[_history.heightAnchor constraintEqualToConstant:115].active=YES;
     NSTextField *help=Text(@"Edit walls while running to trigger a new scan and plan. Moving base/goal or changing options restarts the mission. Restart keeps your edited maze.",11);[help.widthAnchor constraintEqualToConstant:1060].active=YES;
-    NSStackView *content=Stack(@[Text(@"TERNARY EXPLORER",23,YES),Text(@"A robot that distinguishes blocked, unknown and clear. Its navigation runs on the ternary guest CPU.",13),toolbar,settings,body,help,Text(@"RECENT DECISIONS",11,YES),_history,Text(@"Original Tunguska: Viktor Lofgren · Independent Explorer addition: Vinny Lingham · GPL v2 or later · Offline simulation",10)],YES);
-    content.spacing=12;content.translatesAutoresizingMaskIntoConstraints=NO;[window.contentView addSubview:content];
-    [NSLayoutConstraint activateConstraints:@[[content.leadingAnchor constraintEqualToAnchor:window.contentView.leadingAnchor constant:24],[content.topAnchor constraintEqualToAnchor:window.contentView.topAnchor constant:20],[content.trailingAnchor constraintLessThanOrEqualToAnchor:window.contentView.trailingAnchor constant:-20],[content.bottomAnchor constraintLessThanOrEqualToAnchor:window.contentView.bottomAnchor constant:-14]]];
+    NSView *mission=TGCard(TGStack(@[settings,body,help],YES,18));
+    NSView *history=TGSection(@"Recent decisions",_history);
+    NSStackView *content=TGStack(@[toolbar,mission,history,Text(@"Original Tunguska: Viktor Lofgren · Explorer: Vinny Lingham · GPL v2 or later · Offline simulation",10)],YES,20);
+    [mission.widthAnchor constraintEqualToAnchor:content.widthAnchor].active=YES;
+    [history.widthAnchor constraintEqualToAnchor:content.widthAnchor].active=YES;
+    TGInstallPage(window,@"Explorer",@"A robot that treats blocked, unknown and clear as three different states.",@"map",content,1096);
     __weak ExplorerLab *weak=self;_world.edit=^(int cell){[weak edit:cell];};_world.selectionChanged=^(int cell){[weak refreshSelection];};
     [self presetChanged:nil];return self;
 }
@@ -207,6 +205,7 @@ static void Draw(NSString *s,NSRect rect,CGFloat size,NSColor *color) {
     try{_automatic=NO;if(_session->active())_session->runtime().setRunning(true);else if(!_simulation.finished())[self beginTurn:NO];[self refresh];}
     catch(const std::exception& error){[self error:error];}
 }
+- (void)showDebugger:(id)sender { [self debugBrain:sender]; }
 - (void)debugBrain:(id)sender {
     try {
         _automatic=NO;
@@ -238,6 +237,8 @@ static void Draw(NSString *s,NSRect rect,CGFloat size,NSColor *color) {
     if(!_session)return;
     bool active=_session->active(),paused=active&&!_session->runtime().running();
     _run.title=_automatic?@"Pause":paused?@"Resume":@"Run";_run.enabled=_step.enabled=_debug.enabled=!_simulation.finished();
+    _run.image=[NSImage imageWithSystemSymbolName:_automatic?@"pause.fill":@"play.fill" accessibilityDescription:nil];
+    _run.accessibilityLabel=_run.title;
     _export.enabled=YES;_newMaze.enabled=_preset.indexOfSelectedItem==2;
     _headline.stringValue=_notice?@"Check this":_simulation.finished()?(_simulation.position()==_simulation.world().goal?@"Goal reached":_simulation.position()==_simulation.world().home?@"At base":@"Mission stopped"):paused?@"Brain paused":active?@"Planning…":_automatic?(_simulation.returning()?@"Returning home":@"Exploring"):@"Ready to step";
     _metrics.stringValue=[NSString stringWithFormat:@"Energy %d / %d\nMap known %d / 225 · %.0f%%\nMoves %d · Scans %d\nRobot (%d, %d) · Seed %u",_simulation.energy(),_simulation.options().capacity,_simulation.knownCount(),100.0*_simulation.knownCount()/225,_simulation.moves(),_simulation.scans(),_simulation.position()%15+1,_simulation.position()/15+1,_simulation.world().seed];
