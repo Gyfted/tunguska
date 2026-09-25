@@ -107,7 +107,9 @@ def prepare(args):
 
 def choose_identity(requested):
     identities = capture("security", "find-identity", "-v", "-p", "codesigning")
-    choices = re.findall(r'([0-9A-Fa-f]{40}) "(Developer ID Application:[^"]+)"', identities)
+    # Keychain searches can report the same certificate more than once. Only
+    # distinct certificates should make an exact identity selection ambiguous.
+    choices = set(re.findall(r'([0-9A-Fa-f]{40}) "(Developer ID Application:[^"]+)"', identities))
     matches = [(fingerprint, name) for fingerprint, name in choices if requested in (fingerprint, name)]
     if len(matches) != 1:
         raise ValueError("Install a valid Developer ID Application certificate with its private key, then supply its exact name or fingerprint")

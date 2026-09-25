@@ -71,6 +71,20 @@ class ReleaseGates(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Developer ID"):
             verify_fixture(verify_app.EXPECTED_ENTITLEMENTS, signature, developer_id=True)
 
+    def test_duplicate_keychain_results_do_not_hide_valid_identity(self):
+        name = "Developer ID Application: Example (TEAMID)"
+        first, second = "A" * 40, "B" * 40
+        listing = f'1) {first} "{name}"\n2) {first} "{name}"\n'
+        with patch.object(release, "capture", return_value=listing):
+            self.assertEqual(release.choose_identity(name), (first, name))
+            self.assertEqual(release.choose_identity(first), (first, name))
+        # Renewed certificates can share a display name. Preserve the explicit
+        # fingerprint requirement when they really are different certificates.
+        with patch.object(release, "capture", return_value=listing + f'3) {second} "{name}"\n'):
+            with self.assertRaises(ValueError):
+                release.choose_identity(name)
+            self.assertEqual(release.choose_identity(second), (second, name))
+
 
 if __name__ == "__main__":
     unittest.main()
