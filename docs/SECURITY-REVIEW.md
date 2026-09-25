@@ -297,3 +297,25 @@ bounded commands. An already submitted GPU command cannot be forcibly cancelled
 by the app. The app adds no hard process-wide CPU/memory limit, comprehensive GPU
 fuzzing, independent security audit or hardware power measurement. Existing
 emulator/compiler limitations remain; Apple signing/notarization stays deferred.
+
+## Local Search addition (0.13.0)
+
+Selected-folder text and Markdown reads use bounded regular-file descriptors,
+`openat` and `O_NOFOLLOW` for each component. Symlinks, hidden entries, package
+contents, FIFOs and devices are excluded. Queries have byte/term limits and
+canonical terms are bound into a prepared SQLite statement. The index is
+session-only; no network or additional entitlement. SearchService's denial of an
+unselected private-home folder and successful in-container lexical/semantic
+search are exercised in the real production sandbox test app.
+
+Search tests check exact packed ternary arithmetic, Accelerate against an
+independent double-precision cosine reference, seeded approximate recall, native
+BM25/SQLite score and result parity, Unicode, PDF page extraction, malformed PDFs,
+FIFO/link rejection, cancellation and quality gates under ASan/UBSan. Native UI
+checks cover folder selection, paraphrases, excerpts and coordinated JSON export.
+
+PDFKit and NaturalLanguage are Apple frameworks, not bundled third-party
+dependencies. PDF parsing remains in-process; file/page/text limits do not bound
+internal parser allocations or time. The search addition has not had an external
+security audit, PDF fuzz campaign, or Intel/older-macOS runtime validation. See
+[SEARCH.md](SEARCH.md) for concrete limits and incomplete capabilities.

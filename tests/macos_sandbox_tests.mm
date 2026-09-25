@@ -2,6 +2,7 @@
 // Executed as a separately signed test app with the production entitlements.
 #import <Cocoa/Cocoa.h>
 #import "macos/FileAccess.h"
+#import "macos/SearchService.h"
 #include <cerrno>
 #include <fcntl.h>
 #include <sys/socket.h>
@@ -54,8 +55,20 @@ int main(int argc, const char *argv[]) {
             bool rejected = false;
             try { tunguska::macos::saveDiskImage(runtime, link); } catch (const std::runtime_error&) { rejected = true; }
             check(rejected, "native save rejects symbolic-link destinations");
+            std::atomic<bool> cancel{false};
+            NSURL *unselected=[NSURL fileURLWithPath:[NSString stringWithUTF8String:argv[1]]];
+            rejected=false;
+            try { [SearchService indexFolder:unselected.URLByDeletingLastPathComponent cancel:cancel progress:{} semantic:NO]; }
+            catch(const std::exception&) { rejected=true; }
+            check(rejected,"search index cannot read an unselected private folder");
+            NSURL *note=[directory URLByAppendingPathComponent:@"receipt.md"];
+            check([@"Receipt for the blue couch in reception." writeToURL:note atomically:YES encoding:NSUTF8StringEncoding error:&error],"write search fixture in container");
+            SearchService *search=[SearchService indexFolder:directory cancel:cancel progress:{} semantic:YES];
+            check(search.fileCount==1&&search.semanticCount==1,"search and offline model work inside App Sandbox");
+            check([[search search:@"couch" meaning:NO reference:NO][@"hits"] count]==1,"sandboxed keyword search");
+            check([[search search:@"furniture purchase" meaning:YES reference:NO][@"hits"] count]==1,"sandboxed meaning search");
             [NSFileManager.defaultManager removeItemAtURL:directory error:nil];
-            std::cout << "PASS App Sandbox denies unselected file reads/writes and network; boot and coordinated saves work\n";
+            std::cout << "PASS App Sandbox denies unselected file reads/writes, folder indexing and network; boot, coordinated saves and offline search work\n";
             return 0;
         } catch (const std::exception& error) {
             std::cerr << "FAIL: " << error.what() << '\n';

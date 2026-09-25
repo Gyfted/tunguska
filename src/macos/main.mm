@@ -5,6 +5,7 @@
 #import "VisionLab.h"
 #import "ExplorerLab.h"
 #import "WeightLab.h"
+#import "SearchWindow.h"
 #import "FileAccess.h"
 #import "Interface.h"
 #include "runtime.h"
@@ -144,6 +145,7 @@ static NSColor *RGB(unsigned rgb) {
 @property(strong) VisionLab *visionLab;
 @property(strong) ExplorerLab *explorerLab;
 @property(strong) WeightLab *weightLab;
+@property(strong) SearchWindow *searchWindow;
 @property(strong) ScreenView *screen;
 @property(strong) NSButton *runButton;
 @property(strong) NSButton *stepButton;
@@ -186,6 +188,7 @@ static NSColor *RGB(unsigned rgb) {
     computer.state = NSControlStateValueOn;
     [sidebar addArrangedSubview:computer];
     [sidebar setCustomSpacing:20 afterView:computer];
+    [sidebar addArrangedSubview:TGNavigation(@"Local Search", @"Find words and related ideas.", @"magnifyingglass", self, @selector(showSearch:))];
     [sidebar addArrangedSubview:TGHeading(@"Experiments", 11)];
     [sidebar addArrangedSubview:TGNavigation(@"Vision Lab", @"Draw a digit. Inspect a network.", @"eye", self, @selector(showVisionLab:))];
     [sidebar addArrangedSubview:TGNavigation(@"Explorer", @"Navigate an unknown world.", @"map", self, @selector(showExplorer:))];
@@ -287,8 +290,11 @@ static NSColor *RGB(unsigned rgb) {
     [file.submenu addItemWithTitle:@"Eject Disk" action:@selector(ejectDisk:) keyEquivalent:@""];
     NSMenuItem *edit = [[NSMenuItem alloc] init]; [bar addItem:edit];
     edit.submenu = [[NSMenu alloc] initWithTitle:@"Edit"];
+    [edit.submenu addItemWithTitle:@"Undo" action:@selector(undo:) keyEquivalent:@"z"];
+    [edit.submenu addItemWithTitle:@"Cut" action:@selector(cut:) keyEquivalent:@"x"];
     [edit.submenu addItemWithTitle:@"Copy" action:@selector(copy:) keyEquivalent:@"c"];
     [edit.submenu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
+    [edit.submenu addItemWithTitle:@"Select All" action:@selector(selectAll:) keyEquivalent:@"a"];
     NSMenuItem *machine = [[NSMenuItem alloc] init]; [bar addItem:machine];
     machine.submenu = [[NSMenu alloc] initWithTitle:@"Machine"];
     [machine.submenu addItemWithTitle:@"Run / Pause" action:@selector(toggleRun:) keyEquivalent:@"p"];
@@ -301,6 +307,7 @@ static NSColor *RGB(unsigned rgb) {
     [machine.submenu addItemWithTitle:@"Ternary Vision Lab" action:@selector(showVisionLab:) keyEquivalent:@"l"];
     [machine.submenu addItemWithTitle:@"Ternary Explorer" action:@selector(showExplorer:) keyEquivalent:@"e"];
     [machine.submenu addItemWithTitle:@"Weight Race" action:@selector(showWeightRace:) keyEquivalent:@"g"];
+    [machine.submenu addItemWithTitle:@"Local Search…" action:@selector(showSearch:) keyEquivalent:@"f"];
     NSMenuItem *view = [[NSMenuItem alloc] init]; [bar addItem:view];
     view.submenu = [[NSMenu alloc] initWithTitle:@"View"];
     [view.submenu addItemWithTitle:@"Computer" action:@selector(showComputer:) keyEquivalent:@"1"];
@@ -333,6 +340,12 @@ static NSColor *RGB(unsigned rgb) {
 - (void)changeAppearance:(NSMenuItem *)sender {
     [NSUserDefaults.standardUserDefaults setObject:sender.representedObject forKey:@"InterfaceAppearance"];
     [self applyAppearance];
+}
+- (void)showSearch:(id)sender {
+    if (_runtime) _runtime->setRunning(false);
+    if (!self.searchWindow) self.searchWindow=[[SearchWindow alloc] init];
+    [self.searchWindow showWindow:sender];
+    [self updateStats];
 }
 - (void)showComputer:(id)sender { [self.window makeKeyAndOrderFront:sender]; [self.window makeFirstResponder:self.screen]; }
 - (BOOL)applicationShouldHandleReopen:(NSApplication *)app hasVisibleWindows:(BOOL)visible { [self showComputer:nil]; return YES; }

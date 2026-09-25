@@ -11,6 +11,7 @@ programs. Short descriptions explain what each experiment does. Run, Step and
 Debugger sit beside the display; the current system image and virtual disk have
 their own panel below it. CPU registers live in the debugger.
 
+- **⌘F:** Local Search for a selected folder of text, Markdown and PDFs.
 - **⌘1:** return to Computer without resetting its memory or disk.
 - **⌘2 / ⌘L:** Vision Lab.
 - **⌘3 / ⌘E:** Explorer.
@@ -18,7 +19,7 @@ their own panel below it. CPU registers live in the debugger.
 - **⌘W:** close the active window. The Window menu lists open windows.
 - **View → Appearance:** follow the system, or choose Light or Dark.
 
-Opening an experiment pauses the original computer. Returning to Computer
+Opening Local Search or an experiment pauses the original computer. Returning to Computer
 preserves that pause; choose Run when ready. Reset and original-program buttons
 still start fresh state and eject the virtual disk; their tooltips explain this.
 Machine/file commands cannot silently operate the original computer from another

@@ -12,7 +12,7 @@ OBJECTS := $(addprefix build/,$(addsuffix .o,$(CORE)))
 TEST_SOURCES := tests/core_tests.cc tests/debugger_tests.cc
 
 .PHONY: all app test sanitize security-check sandbox-check verify-app release-check run
-all: app build/tg_assembler build/tunguska-cli build/3cc
+all: app build/tg_assembler build/tunguska-cli build/3cc build/search-cli
 
 TRICC_SOURCES := $(wildcard src/3cc/*.cc)
 TRICC_HEADERS := $(wildcard src/3cc/*.h)
@@ -103,8 +103,11 @@ build/debugger.o: src/debugger.cc src/debugger.h Makefile | build
 build/tunguska-cli: src/cli.cc build/runtime.o $(OBJECTS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc $^ $(LDLIBS) -o $@
 
-build/Tunguska: src/macos/Interface.mm src/macos/Interface.h src/macos/WeightLab.mm src/macos/WeightLab.h src/macos/WeightBenchmark.mm src/weight_benchmark.h build/weight_benchmark.o src/macos/ExplorerLab.mm src/macos/ExplorerLab.h build/explorer.o src/macos/main.mm src/macos/VisionLab.mm src/macos/VisionLab.h build/vision.o src/macos/DebuggerWindow.mm src/macos/DebuggerWindow.h src/macos/FileAccess.mm src/macos/FileAccess.h build/runtime.o build/debugger.o $(OBJECTS)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $(filter-out %.h,$^) $(LDLIBS) -framework Cocoa -framework Metal -framework MetalPerformanceShaders -o $@
+SEARCH_SOURCES := src/search.cc src/macos/SearchService.mm
+SEARCH_FRAMEWORKS := -framework Cocoa -framework CoreGraphics -framework NaturalLanguage -framework PDFKit -framework Accelerate -lsqlite3
+
+build/Tunguska: src/macos/SearchWindow.mm src/macos/SearchWindow.h $(SEARCH_SOURCES) src/search.h src/macos/SearchService.h src/macos/Interface.mm src/macos/Interface.h src/macos/WeightLab.mm src/macos/WeightLab.h src/macos/WeightBenchmark.mm src/weight_benchmark.h build/weight_benchmark.o src/macos/ExplorerLab.mm src/macos/ExplorerLab.h build/explorer.o src/macos/main.mm src/macos/VisionLab.mm src/macos/VisionLab.h build/vision.o src/macos/DebuggerWindow.mm src/macos/DebuggerWindow.h src/macos/FileAccess.mm src/macos/FileAccess.h build/runtime.o build/debugger.o $(OBJECTS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $(filter-out %.h,$^) $(LDLIBS) -framework Cocoa -framework Metal -framework MetalPerformanceShaders $(SEARCH_FRAMEWORKS) -o $@
 
 app: build/Tunguska build/boot.ternobj build/boot-3cc.ternobj build/vision.ternobj build/explorer.ternobj
 	mkdir -p build/Tunguska.app/Contents/MacOS build/Tunguska.app/Contents/Resources
@@ -128,8 +131,8 @@ build/rendering-tests: tests/macos_rendering_tests.mm src/macos/Interface.mm src
 rendering-check: build/rendering-tests
 	build/rendering-tests
 
-build/sandbox-tests: tests/macos_sandbox_tests.mm src/macos/FileAccess.mm src/macos/FileAccess.h build/runtime.o $(OBJECTS)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $(filter-out %.h,$^) $(LDLIBS) -framework Cocoa -o $@
+build/sandbox-tests: tests/macos_sandbox_tests.mm src/macos/FileAccess.mm src/macos/FileAccess.h $(SEARCH_SOURCES) src/search.h src/macos/SearchService.h build/runtime.o $(OBJECTS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $(filter-out %.h,$^) $(LDLIBS) $(SEARCH_FRAMEWORKS) -o $@
 
 sandbox-check: build/sandbox-tests build/boot.ternobj
 	mkdir -p build/SandboxTests.app/Contents/MacOS build/SandboxTests.app/Contents/Resources
@@ -227,3 +230,19 @@ weight-sanitize: build/weight-benchmark-tests-sanitized
 .PHONY: weight-gpu-validation
 weight-gpu-validation: build/weight-benchmark-tests
 	MTL_DEBUG_LAYER=1 MTL_SHADER_VALIDATION=1 build/weight-benchmark-tests resources/benchmark/matvec.metal
+
+.PHONY: search-check search-sanitize
+build/search-cli: src/search_cli.mm $(SEARCH_SOURCES) src/search.h src/macos/SearchService.h Makefile | build
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Wno-deprecated-declarations -Isrc -fobjc-arc $(filter %.cc %.mm,$^) $(SEARCH_FRAMEWORKS) -o $@
+
+build/search-tests: tests/search_tests.mm $(SEARCH_SOURCES) src/search.h src/macos/SearchService.h Makefile | build
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Wno-deprecated-declarations -Isrc -fobjc-arc $(filter %.cc %.mm,$^) $(SEARCH_FRAMEWORKS) -o $@
+
+search-check: build/search-tests
+	build/search-tests
+
+build/search-tests-sanitized: tests/search_tests.mm $(SEARCH_SOURCES) src/search.h src/macos/SearchService.h Makefile | build
+	$(CXX) $(CPPFLAGS) -std=c++17 -O1 -g -Wno-deprecated-declarations -Isrc -fobjc-arc -fsanitize=address,undefined,float-cast-overflow -fno-omit-frame-pointer $(filter %.cc %.mm,$^) $(SEARCH_FRAMEWORKS) -o $@
+
+search-sanitize: build/search-tests-sanitized
+	UBSAN_OPTIONS=halt_on_error=1 build/search-tests-sanitized

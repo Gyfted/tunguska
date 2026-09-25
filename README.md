@@ -23,6 +23,7 @@ Click the display and type `HELP`, then Return. Commands are uppercase. The side
 
 | Control | Action |
 | --- | --- |
+| Local Search, ⌘F | Search a selected folder of text, Markdown and PDFs offline |
 | Computer, ⌘1 | Return to the original machine without resetting it |
 | Vision Lab / Explorer / Weight Race, ⌘2 / ⌘3 / ⌘4 | Switch experiments; the existing ⌘L / ⌘E / ⌘G shortcuts also work |
 | Run / Pause, ⌘P | Start or stop the processor |
@@ -43,7 +44,23 @@ Opening a lab pauses the original machine. Use the **Computer** button or ⌘1 t
 
 The guest’s `LOAD` command no longer opens host paths. Use **Mount Disk**, then `FDSTAT` or `RUN` in the guest. Guest disk writes stay in memory; use **Save Disk As** to persist them. The app uses macOS-coordinated replacement files for atomic saves without requesting access to the enclosing folder. Symbolic-link destinations are rejected. Disk images and memory images contain the same complete 531,441-tryte storage format, but are loaded into different devices.
 
-The app requests only App Sandbox and user-selected file read/write access. There are no network, camera, microphone, broad-folder, JIT or hardened-runtime-exception entitlements. Open and Save dialogs authorize individual files; the current memory image's URL is retained so Reset can reopen it. No persistent file bookmarks are stored. The developer CLI, assembler and 3CC compiler are separate, unsandboxed tools and are not included in the distributed app.
+The app requests only App Sandbox and user-selected file read/write access. There are no network, camera, microphone, broad-folder, JIT or hardened-runtime-exception entitlements. Open and Save dialogs authorize individual files or the folder explicitly selected for Local Search; the current memory image's URL is retained so Reset can reopen it. No persistent file bookmarks are stored. The developer CLI, assembler and 3CC compiler are separate, unsandboxed tools and are not included in the distributed app.
+
+## Local Search
+
+Open **Local Search** (⌘F), choose a folder, and search text, Markdown and PDFs
+with selectable text. Results include excerpts and PDF page numbers. Optional
+English meaning search finds related ideas using an installed Apple sentence
+model, ternary candidate scoring and original-vector reranking. The index stays
+in memory; Refresh picks up edits and Forget folder clears it.
+
+The built-in comparison measures query preparation, ranking and excerpts against
+SQLite FTS5 or an Accelerate FP32 semantic baseline, checks result agreement, and
+exports every sample. It reports a 2× target only when the measurements pass.
+Keyword gains come from the native inverted index; a ternary semantic speedup is
+not assumed. The recorded M5 Max run achieved 12.00× for keyword search and
+0.98× for meaning search; these exclude indexing and screen drawing. See [the search guide](docs/SEARCH.md) for measurements, input limits,
+privacy and the distinction between pipeline latency and visible UI latency.
 
 ## Inspect and debug
 
@@ -143,6 +160,7 @@ make vision-check vision-sanitize
 make explorer-check explorer-sanitize
 make weight-check weight-sanitize weight-gpu-validation
 make rendering-check
+make search-check search-sanitize
 ```
 
 Tests cover every pair of tryte values for addition and multiplication, all 531,441 word conversions, 2,125,764 ADD/CMP instruction cases, memory boundaries, bounded interrupts, image roundtrips and rejection of malformed images, original OS boot and keyboard commands, pause/step/reset, and the original text/vector/raster demos. `sanitize` runs the same suite with AddressSanitizer and UndefinedBehaviorSanitizer.
