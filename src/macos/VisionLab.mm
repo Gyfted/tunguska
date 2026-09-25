@@ -143,7 +143,7 @@ static void DrawText(NSString *s, NSPoint point, CGFloat size, NSColor *color, B
     int high=*std::max_element(_result->scores.begin(),_result->scores.end());
     for(int i=0;i<10;++i) {
         CGFloat y=i*26;
-        NSColor *color=i==_result->prediction()?Green():NSColor.secondaryLabelColor;
+        NSColor *color=i==_result->prediction()?TGSuccessTextColor():NSColor.secondaryLabelColor;
         DrawText([NSString stringWithFormat:@"%d",i],NSMakePoint(0,y+1),13,color,YES);
         [color setFill];
         CGFloat width=std::max(2.0,135.0*(_result->scores[i]-low)/std::max(1,high-low));
@@ -239,10 +239,11 @@ static void DrawText(NSString *s, NSPoint point, CGFloat size, NSColor *color, B
     const auto& item=_visible.at(row);NSString *name=column.identifier;int value=item.margin;
     if([name isEqual:@"Sample"])value=item.sample+1;else if([name isEqual:@"True"])value=item.truth;
     else if([name isEqual:@"Ternary"])value=item.ternary;else if([name isEqual:@"Float32"])value=item.floating;else if([name isEqual:@"8-bit"])value=item.quantized;
-    NSTextField *view=[NSTextField labelWithString:[NSString stringWithFormat:@"%d",value]];
-    view.font=[NSFont monospacedSystemFontOfSize:12 weight:NSFontWeightRegular];
-    if(([name isEqual:@"Ternary"]||[name isEqual:@"Float32"]||[name isEqual:@"8-bit"])&&value!=item.truth)view.textColor=Orange();
-    return view;
+    TGTableCell *cell=TGCell(table,column.identifier);
+    cell.textField.stringValue=[NSString stringWithFormat:@"%d",value];
+    cell.tone=NSColor.labelColor;
+    if(([name isEqual:@"Ternary"]||[name isEqual:@"Float32"]||[name isEqual:@"8-bit"])&&value!=item.truth)cell.tone=TGWarningTextColor();
+    return cell;
 }
 - (void)tableViewSelectionDidChange:(NSNotification*)notification {
     [self updateSelection];

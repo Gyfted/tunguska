@@ -388,7 +388,7 @@ static NSColor *RGB(unsigned rgb) {
     self.runButton.title = _runtime->running() ? @"Pause" : @"Run";
     self.runButton.image = [NSImage imageWithSystemSymbolName:_runtime->running() ? @"pause.fill" : @"play.fill" accessibilityDescription:nil];
     self.runButton.accessibilityLabel = self.runButton.title;
-    self.status.textColor = _runtime->running() ? NSColor.systemGreenColor : NSColor.secondaryLabelColor;
+    self.status.textColor = _runtime->running() ? TGSuccessTextColor() : NSColor.secondaryLabelColor;
     self.mode.stringValue = _runtime->frame().mode == 0 ? @"54 × 27 · Text mode" : _runtime->frame().mode == 1 ? @"Vector graphics" : _runtime->frame().auxiliary == 1 ? @"324 × 243 · 3 colors" : @"324 × 243 · 729 colors";
     self.metrics.stringValue = [NSString stringWithFormat:@"531,441 trytes · 6 trits per tryte · %.0f K instructions/s · %llu executed", rate/1000, (unsigned long long)_runtime->cycles()];
     [self.debugger refresh];

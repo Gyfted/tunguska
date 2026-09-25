@@ -128,9 +128,9 @@ static NSStackView *Stack(NSArray<NSView *> *views, BOOL vertical = NO) {
     return table == _code ? (NSInteger)_instructions.size() : 81;
 }
 - (NSView *)tableView:(NSTableView *)table viewForTableColumn:(NSTableColumn *)column row:(NSInteger)row {
-    NSTextField *cell = [table makeViewWithIdentifier:column.identifier owner:self];
-    if (!cell) { cell = Text(@"", YES); cell.identifier = column.identifier; }
-    if (!self.runtime) { cell.stringValue = @""; return cell; }
+    TGTableCell *tableCell = TGCell(table, column.identifier);
+    NSTextField *cell = tableCell.textField;
+    if (!self.runtime) { cell.stringValue = @""; return tableCell; }
     NSString *key = column.identifier;
     NSString *value = @"";
     BOOL isPC = NO;
@@ -151,8 +151,8 @@ static NSStackView *Stack(NSArray<NSView *> *views, BOOL vertical = NO) {
         else value = String(dbg::ternary(memory));
     }
     cell.stringValue = value;
-    cell.textColor = [key isEqual:@"breakpoint"] ? NSColor.systemOrangeColor : isPC ? NSColor.systemGreenColor : NSColor.labelColor;
-    return cell;
+    tableCell.tone = [key isEqual:@"breakpoint"] ? TGWarningTextColor() : isPC ? TGSuccessTextColor() : NSColor.labelColor;
+    return tableCell;
 }
 - (void)refresh {
     if (!self.runtime || !self.window.visible) return;
@@ -222,7 +222,7 @@ static NSStackView *Stack(NSArray<NSView *> *views, BOOL vertical = NO) {
     auto address = dbg::parseAddress(_address.stringValue.UTF8String ?: "");
     _error.stringValue = address ? @"Nonary digits: 0…4 and A=−1, B=−2, C=−3, D=−4. Memory inspection is read only."
         : @"Invalid address. Enter a decimal integer from −265720 to 265720, or six nonary digits such as 000:000.";
-    _error.textColor = address ? NSColor.secondaryLabelColor : NSColor.systemOrangeColor;
+    _error.textColor = address ? NSColor.secondaryLabelColor : TGWarningTextColor();
     return address;
 }
 - (void)go:(id)sender {

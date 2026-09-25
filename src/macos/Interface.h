@@ -4,6 +4,12 @@
 
 NSTextField *TGText(NSString *text, CGFloat size = 13, BOOL mono = NO);
 NSTextField *TGHeading(NSString *text, CGFloat size = 13);
+NSColor *TGSuccessTextColor();
+NSColor *TGWarningTextColor();
+@interface TGTableCell : NSTableCellView
+@property(nonatomic, strong) NSColor *tone;
+@end
+TGTableCell *TGCell(NSTableView *table, NSString *identifier);
 NSStackView *TGStack(NSArray<NSView *> *views, BOOL vertical = NO, CGFloat spacing = 12);
 NSButton *TGButton(NSString *title, NSString *symbol, id target, SEL action);
 void TGPrimary(NSButton *button);

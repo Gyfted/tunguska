@@ -2,6 +2,41 @@
 // Independent Mac frontend, 2026-09-25. Original Tunguska: Viktor Lofgren.
 #import "Interface.h"
 
+// Plot colors can be bright; small text needs stronger contrast in light mode.
+static NSColor *TGStatusColor(BOOL warning) {
+    return [NSColor colorWithName:nil dynamicProvider:^NSColor *(NSAppearance *appearance) {
+        BOOL dark = [[appearance bestMatchFromAppearancesWithNames:@[NSAppearanceNameAqua, NSAppearanceNameDarkAqua]] isEqual:NSAppearanceNameDarkAqua];
+        unsigned rgb = warning ? (dark ? 0xFFAD70 : 0x963D13) : (dark ? 0x86DDB0 : 0x176B42);
+        return [NSColor colorWithSRGBRed:((rgb >> 16) & 255)/255.0 green:((rgb >> 8) & 255)/255.0 blue:(rgb & 255)/255.0 alpha:1];
+    }];
+}
+NSColor *TGSuccessTextColor() { static NSColor *color = TGStatusColor(NO); return color; }
+NSColor *TGWarningTextColor() { static NSColor *color = TGStatusColor(YES); return color; }
+
+@implementation TGTableCell
+- (void)setTone:(NSColor *)tone { _tone = tone; [self setBackgroundStyle:self.backgroundStyle]; }
+- (void)setBackgroundStyle:(NSBackgroundStyle)style {
+    [super setBackgroundStyle:style];
+    self.textField.textColor = style == NSBackgroundStyleEmphasized ? NSColor.labelColor : (_tone ?: NSColor.labelColor);
+}
+@end
+TGTableCell *TGCell(NSTableView *table, NSString *identifier) {
+    TGTableCell *cell = [table makeViewWithIdentifier:identifier owner:nil];
+    if (!cell) {
+        cell = [[TGTableCell alloc] init]; cell.identifier = identifier;
+        NSTextField *text = [NSTextField labelWithString:@""];
+        text.font = [NSFont monospacedSystemFontOfSize:12 weight:NSFontWeightRegular];
+        text.translatesAutoresizingMaskIntoConstraints = NO;
+        [cell addSubview:text]; cell.textField = text;
+        [NSLayoutConstraint activateConstraints:@[
+            [text.leadingAnchor constraintEqualToAnchor:cell.leadingAnchor constant:2],
+            [text.trailingAnchor constraintEqualToAnchor:cell.trailingAnchor constant:-2],
+            [text.centerYAnchor constraintEqualToAnchor:cell.centerYAnchor]
+        ]];
+    }
+    return cell;
+}
+
 NSTextField *TGText(NSString *text, CGFloat size, BOOL mono) {
     NSTextField *field = [NSTextField wrappingLabelWithString:text];
     field.font = mono ? [NSFont monospacedSystemFontOfSize:size weight:NSFontWeightRegular]
