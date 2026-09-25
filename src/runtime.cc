@@ -4,6 +4,7 @@
 // Mac fork adaptation: 2026-09-24, maintained by Vinny Lingham.
 #include "runtime.h"
 #include "core/values.h"
+#include "display_protocol.h"
 #include <algorithm>
 #include <chrono>
 
@@ -132,6 +133,21 @@ bool Runtime::capture(bool force) {
             const double x = (cpu_->memrefi(TV_DDB, i+1) ^ TV_ADD).to_int() / 242.0 + 0.5;
             const double y = (cpu_->memrefi(TV_DDB, i+2) ^ TV_ADD).to_int() / 242.0 + 0.5;
             frame_.vertices.push_back({x, y, color});
+        }
+    } else if (frame_.auxiliary == -1) {
+        using Palette = std::array<std::array<uint8_t, 3>, 3>;
+        std::array<Palette, 729> palettes;
+        for (int p = 0; p < 729; ++p) for (int tone = 0; tone < 3; ++tone)
+            palettes[p][tone] = color(cpu_->memref(TG_VIDEO_PALETTES+p*3+tone).to_int());
+        for (int cell = 0; cell < TG_VIDEO_WORDS; ++cell) {
+            const auto& palette = palettes[cpu_->memref(TG_VIDEO_ATTRIBUTES+cell).to_int()+364];
+            const tryte& bits = cpu_->memref(TG_VIDEO_BITMAP+cell);
+            for (int pixel = 0; pixel < 6; ++pixel) {
+                const auto& rgb = palette[bits[pixel].to_int()+1];
+                const int i = 4*(cell*6+pixel);
+                frame_.pixels[i] = rgb[0]; frame_.pixels[i+1] = rgb[1];
+                frame_.pixels[i+2] = rgb[2]; frame_.pixels[i+3] = 255;
+            }
         }
     } else {
         const int offset = PODWORD_TO_INT(TV_DDB, TV_DDD);

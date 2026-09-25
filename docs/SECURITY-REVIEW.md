@@ -365,3 +365,30 @@ state equality across 210 frames. Held-key repetition is bounded, ignores OS
 repeat events, clears on release/focus loss/pause, and never catches up missed
 repeats. Non-game keyboard behavior retains the original path. The game does not
 subscribe to unused mouse interrupts. No permissions or entitlements are added.
+
+
+## Breach palette display and sound (0.15.0)
+
+The new raster auxiliary mode uses fixed memory regions and a bounded table of
+729 three-color palettes. Signed trytes bound each attribute index; core tests
+cover all 729 indices and the last framebuffer pixel. The old raster modes are
+unchanged. A paired 210-frame test preserves monochrome bitmap geometry and game
+state. Active Breach rendering now allows 120,000 instructions / 9 ms per tick;
+idle and non-game execution retain 18,000 / 7 ms. This is a cooperative budget,
+not a security watchdog or a hard real-time deadline.
+
+Sound commands use a 27-slot guest ring, with at most 26 entries drained per poll.
+Invalid queue positions reset the ring, unknown IDs are ignored, and full queues
+drop new events. Ten original effects are synthesized once and mixed with at
+most eight voices. The callback performs no allocations or locks and bounds the
+output amplitude. Waveform, ring corruption, overflow, mute and voice-flood tests
+run normally and under ASan/UBSan. Guest tests assert every sound event.
+
+The AVAudioSourceNode block owns its mixer by value through a shared pointer;
+configuration notifications capture only a weak device reference. A native
+normal/sanitized test exercises the actual output callback and teardown. Missing
+or denied audio components are caught at initialization so gameplay continues
+without sound. Mute, pause and focus loss discard pending events and stop voices.
+Output requires no microphone or additional sandbox entitlements. Host audio
+route changes are handled, but every external audio device and Intel runtime
+have not been tested. These are focused checks, not an independent audit.

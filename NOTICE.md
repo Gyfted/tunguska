@@ -50,7 +50,8 @@ These data terms do not replace the GPL terms of the software or imply endorseme
 ## Ternary Breach
 
 Ternary Breach is an original first-person game added to the independent Mac fork
-on 2026-09-25. Its source, map, simple bitmap font and sprite designs are distributed
+on 2026-09-25. Its source, map, simple bitmap font, sprite designs, color palettes
+and synthesized sound effects are original work in this fork, distributed
 under GPL-2.0-or-later. It runs on Viktor Lofgren's Tunguska and is built with his
 3CC compiler. No Doom code, proprietary game data or third-party game assets are
 included. This is not an official Doom port or an endorsed Tunguska release.

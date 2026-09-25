@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "runtime.h"
 #include "core/values.h"
+#include "display_protocol.h"
 #include <climits>
 #include <filesystem>
 #include <fstream>
@@ -148,6 +149,28 @@ int main(int argc, char **argv) {
         check(runtime.frame().mode == -1 && runtime.frame().auxiliary == 1, "3 color demo");
         runtime.reset(argv[1]); runtime.run(500000); command(runtime, "CHARMAP");
         check(runtime.frame().mode == 0, "character demo");
+        // Palette attributes are signed trytes. Exercise every palette index,
+        // every tone, both ends of the tables and the last framebuffer pixel.
+        tryte pattern;
+        for(int pixel=0;pixel<6;++pixel)pattern[pixel]=pixel%3-1;
+        for(int p=0;p<729;++p) {
+            runtime.cpu().memref(TG_VIDEO_BITMAP+p)=pattern;
+            runtime.cpu().memref(TG_VIDEO_ATTRIBUTES+p)=p-364;
+            for(int tone=0;tone<3;++tone)runtime.cpu().memref(TG_VIDEO_PALETTES+p*3+tone)=(p*3+tone)%729-364;
+        }
+        runtime.cpu().memref(TG_VIDEO_BITMAP+TG_VIDEO_WORDS-1)=pattern;
+        runtime.cpu().memref(TG_VIDEO_ATTRIBUTES+TG_VIDEO_WORDS-1)=364;
+        runtime.cpu().memrefi(TV_DDD,TV_DDB)=-11;
+        runtime.capture();
+        check(runtime.frame().mode==-1 && runtime.frame().auxiliary==-1,"palette raster mode");
+        for(int p=0;p<729;++p)for(int pixel=0;pixel<6;++pixel) {
+            const int color=(p*3+pixel%3)%729,offset=(p*6+pixel)*4;
+            const auto& rgb=runtime.frame().pixels;
+            check(rgb[offset]==28*(color/81) && rgb[offset+1]==28*(color/9%9) && rgb[offset+2]==28*(color%9) && rgb[offset+3]==255,
+                  "palette raster differs from independent RGB reference");
+        }
+        const auto& rgb=runtime.frame().pixels;
+        check(rgb[rgb.size()-4]==224 && rgb[rgb.size()-3]==224 && rgb[rgb.size()-2]==224,"last palette/framebuffer entry");
         auto& frameCPU = runtime.cpu();
         frameCPU.P[machine::I] = 1; frameCPU.PCH = frameCPU.PCL = 0;
         frameCPU.memref(0) = machine::qop(machine::ABS, machine::JMP);

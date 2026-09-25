@@ -52,24 +52,24 @@ build/boot-3cc.ternobj: $(GUEST_3CC) $(wildcard resources/memory_image_3cc/*.3h)
 build/breach_assets.3h: scripts/build_breach_assets.py | build
 	python3 $< $@
 
-build/breach.ternobj: resources/breach/breach.3c src/breach_protocol.h build/breach_assets.3h build/3cc build/tg_assembler scripts/compile_3cc.py
+build/breach.ternobj: resources/breach/breach.3c src/breach_protocol.h src/display_protocol.h build/breach_assets.3h build/3cc build/tg_assembler scripts/compile_3cc.py
 	python3 scripts/compile_3cc.py -I build $< -o $@
 
-build/breach-tests: tests/breach_tests.cc src/breach_protocol.h src/game_input.h build/runtime.o $(OBJECTS)
+build/breach-tests: tests/breach_tests.cc src/breach_protocol.h src/display_protocol.h src/game_input.h src/game_audio.h build/game_audio.o build/runtime.o $(OBJECTS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc $(filter-out %.h,$^) $(LDLIBS) -o $@
 
-build/breach-tests-sanitized: tests/breach_tests.cc src/breach_protocol.h src/game_input.h src/runtime.cc src/runtime.h $(wildcard src/core/*.cc src/core/*.h)
-	$(CXX) $(CPPFLAGS) -Isrc -std=c++17 -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer tests/breach_tests.cc src/runtime.cc $(addprefix src/core/,$(addsuffix .cc,$(CORE))) $(LDLIBS) -o $@
+build/breach-tests-sanitized: tests/breach_tests.cc src/breach_protocol.h src/game_input.h src/game_audio.h src/game_audio.cc src/display_protocol.h src/runtime.cc src/runtime.h $(wildcard src/core/*.cc src/core/*.h)
+	$(CXX) $(CPPFLAGS) -Isrc -std=c++17 -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer tests/breach_tests.cc src/game_audio.cc src/runtime.cc $(addprefix src/core/,$(addsuffix .cc,$(CORE))) $(LDLIBS) -o $@
 
-build/breach-sanitized.ternobj: resources/breach/breach.3c src/breach_protocol.h build/breach_assets.3h build/3cc-sanitized build/tg_assembler scripts/compile_3cc.py
+build/breach-sanitized.ternobj: resources/breach/breach.3c src/breach_protocol.h src/display_protocol.h build/breach_assets.3h build/3cc-sanitized build/tg_assembler scripts/compile_3cc.py
 	python3 -c 'from scripts.compile_3cc import compile_sources; compile_sources(["resources/breach/breach.3c"], "$@", includes=["build"], backend="build/3cc-sanitized")'
 
-build/breach-performance: tests/breach_performance.cc src/breach_protocol.h build/runtime.o $(OBJECTS)
+build/breach-performance: tests/breach_performance.cc src/breach_protocol.h src/display_protocol.h src/game_audio.h build/game_audio.o build/runtime.o $(OBJECTS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc $(filter-out %.h,$^) $(LDLIBS) -o $@
 
 .PHONY: breach-benchmark
 breach-benchmark: build/breach-performance build/breach.ternobj
-	build/breach-performance build/breach.ternobj $(BREACH_REFERENCE)
+	build/breach-performance build/breach.ternobj $(BREACH_REFERENCE) $(BREACH_REFERENCE_FLAGS)
 
 .PHONY: breach-check breach-sanitize
 breach-check: build/breach-tests build/breach.ternobj
@@ -77,6 +77,29 @@ breach-check: build/breach-tests build/breach.ternobj
 
 breach-sanitize: build/breach-tests-sanitized build/breach-sanitized.ternobj
 	UBSAN_OPTIONS=halt_on_error=1 build/breach-tests-sanitized build/breach-sanitized.ternobj
+
+build/audio-tests: tests/game_audio_tests.cc src/game_audio.h src/breach_protocol.h build/game_audio.o $(OBJECTS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc $(filter-out %.h,$^) $(LDLIBS) -o $@
+
+build/audio-tests-sanitized: tests/game_audio_tests.cc src/game_audio.cc src/game_audio.h src/breach_protocol.h $(wildcard src/core/*.cc src/core/*.h)
+	$(CXX) $(CPPFLAGS) -Isrc -std=c++17 -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer tests/game_audio_tests.cc src/game_audio.cc $(addprefix src/core/,$(addsuffix .cc,$(CORE))) $(LDLIBS) -o $@
+
+build/macos-audio-tests: tests/macos_audio_tests.mm src/macos/GameAudio.mm src/macos/GameAudio.h build/game_audio.o $(OBJECTS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $(filter-out %.h,$^) $(LDLIBS) -framework Foundation -framework AVFoundation -o $@
+
+build/macos-audio-tests-sanitized: tests/macos_audio_tests.mm src/macos/GameAudio.mm src/macos/GameAudio.h src/game_audio.cc src/game_audio.h src/breach_protocol.h $(wildcard src/core/*.cc src/core/*.h)
+	$(CXX) $(CPPFLAGS) -Isrc -std=c++17 -g -O1 -fobjc-arc -fsanitize=address,undefined -fno-omit-frame-pointer tests/macos_audio_tests.mm src/macos/GameAudio.mm src/game_audio.cc $(addprefix src/core/,$(addsuffix .cc,$(CORE))) $(LDLIBS) -framework Foundation -framework AVFoundation -o $@
+
+.PHONY: audio-check audio-sanitize audio-device-check
+audio-check: build/audio-tests
+	build/audio-tests
+
+audio-sanitize: build/audio-tests-sanitized
+	UBSAN_OPTIONS=halt_on_error=1 build/audio-tests-sanitized
+
+audio-device-check: build/macos-audio-tests build/macos-audio-tests-sanitized
+	build/macos-audio-tests
+	ASAN_OPTIONS=detect_stack_use_after_return=1 UBSAN_OPTIONS=halt_on_error=1 build/macos-audio-tests-sanitized
 
 guest-3cc: build/boot-3cc.ternobj
 
@@ -111,6 +134,9 @@ assembler-sanitize: build/tg_assembler-sanitized
 build/boot.ternobj: build/tg_assembler $(wildcard resources/memory_image_asm/*.asm)
 	cd resources/memory_image_asm && ../../build/tg_assembler -o ../../build/boot.ternobj ram.asm
 
+build/game_audio.o: src/game_audio.cc src/game_audio.h src/breach_protocol.h Makefile | build
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -MMD -MP -c $< -o $@
+
 build/runtime.o: src/runtime.cc src/runtime.h Makefile | build
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -MMD -MP -c $< -o $@
 
@@ -135,8 +161,8 @@ build/tunguska-cli: src/cli.cc build/runtime.o $(OBJECTS)
 SEARCH_SOURCES := src/search.cc src/macos/SearchService.mm
 SEARCH_FRAMEWORKS := -framework Cocoa -framework CoreGraphics -framework NaturalLanguage -framework PDFKit -framework Accelerate -lsqlite3
 
-build/Tunguska: src/macos/SearchWindow.mm src/macos/SearchWindow.h $(SEARCH_SOURCES) src/search.h src/macos/SearchService.h src/macos/Interface.mm src/macos/Interface.h src/macos/WeightLab.mm src/macos/WeightLab.h src/macos/WeightBenchmark.mm src/weight_benchmark.h build/weight_benchmark.o src/macos/ExplorerLab.mm src/macos/ExplorerLab.h build/explorer.o src/macos/main.mm src/breach_protocol.h src/game_input.h src/macos/VisionLab.mm src/macos/VisionLab.h build/vision.o src/macos/DebuggerWindow.mm src/macos/DebuggerWindow.h src/macos/FileAccess.mm src/macos/FileAccess.h build/runtime.o build/debugger.o $(OBJECTS)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $(filter-out %.h,$^) $(LDLIBS) -framework Cocoa -framework Metal -framework MetalPerformanceShaders $(SEARCH_FRAMEWORKS) -o $@
+build/Tunguska: src/macos/GameAudio.mm src/macos/GameAudio.h src/game_audio.h build/game_audio.o src/macos/SearchWindow.mm src/macos/SearchWindow.h $(SEARCH_SOURCES) src/search.h src/macos/SearchService.h src/macos/Interface.mm src/macos/Interface.h src/macos/WeightLab.mm src/macos/WeightLab.h src/macos/WeightBenchmark.mm src/weight_benchmark.h build/weight_benchmark.o src/macos/ExplorerLab.mm src/macos/ExplorerLab.h build/explorer.o src/macos/main.mm src/breach_protocol.h src/game_input.h src/macos/VisionLab.mm src/macos/VisionLab.h build/vision.o src/macos/DebuggerWindow.mm src/macos/DebuggerWindow.h src/macos/FileAccess.mm src/macos/FileAccess.h build/runtime.o build/debugger.o $(OBJECTS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $(filter-out %.h,$^) $(LDLIBS) -framework Cocoa -framework AVFoundation -framework Metal -framework MetalPerformanceShaders $(SEARCH_FRAMEWORKS) -o $@
 
 app: build/Tunguska build/boot.ternobj build/boot-3cc.ternobj build/vision.ternobj build/explorer.ternobj build/breach.ternobj
 	mkdir -p build/Tunguska.app/Contents/MacOS build/Tunguska.app/Contents/Resources
@@ -184,13 +210,13 @@ build/core-tests: $(TEST_SOURCES) build/runtime.o build/debugger.o $(OBJECTS)
 test: build/core-tests build/boot.ternobj
 	build/core-tests build/boot.ternobj
 
-build/core-tests-sanitized: $(TEST_SOURCES) src/runtime.cc src/runtime.h src/debugger.cc src/debugger.h $(wildcard src/core/*.cc src/core/*.h) Makefile | build
+build/core-tests-sanitized: $(TEST_SOURCES) src/runtime.cc src/runtime.h src/display_protocol.h src/debugger.cc src/debugger.h $(wildcard src/core/*.cc src/core/*.h) Makefile | build
 	$(CXX) $(CPPFLAGS) -Isrc -std=c++17 -mmacosx-version-min=12.0 -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $(TEST_SOURCES) src/runtime.cc src/debugger.cc $(addprefix src/core/,$(addsuffix .cc,$(CORE))) $(LDLIBS) -o $@
 
 sanitize: build/core-tests-sanitized build/boot.ternobj
 	UBSAN_OPTIONS=halt_on_error=1 build/core-tests-sanitized build/boot.ternobj
 
-build/security-tests: tests/security_tests.cc src/runtime.cc src/runtime.h $(wildcard src/core/*.cc src/core/*.h) Makefile | build
+build/security-tests: tests/security_tests.cc src/runtime.cc src/runtime.h src/display_protocol.h $(wildcard src/core/*.cc src/core/*.h) Makefile | build
 	$(CXX) $(CPPFLAGS) -Isrc -std=c++17 -mmacosx-version-min=12.0 -g -O1 -fsanitize=address,undefined,float-cast-overflow -fno-omit-frame-pointer tests/security_tests.cc src/runtime.cc $(addprefix src/core/,$(addsuffix .cc,$(CORE))) $(LDLIBS) -o $@
 
 security-check: build/security-tests build/boot.ternobj
@@ -218,7 +244,7 @@ vision-check: build/vision-tests build/vision.ternobj build/vision-reference.ter
 	build/vision-tests build/vision.ternobj resources/vision/vision-digits.bin --reference build/vision-reference.ternobj > build/vision-tests.log 2>&1 || { tail -30 build/vision-tests.log; exit 1; }
 	@tail -3 build/vision-tests.log
 
-build/vision-tests-sanitized: tests/vision_tests.cc src/vision.cc src/vision.h resources/vision/model.h src/runtime.cc src/runtime.h $(wildcard src/core/*.cc src/core/*.h) Makefile | build
+build/vision-tests-sanitized: tests/vision_tests.cc src/vision.cc src/vision.h resources/vision/model.h src/runtime.cc src/runtime.h src/display_protocol.h $(wildcard src/core/*.cc src/core/*.h) Makefile | build
 	$(CXX) $(CPPFLAGS) -Isrc -std=c++17 -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer tests/vision_tests.cc src/vision.cc src/runtime.cc $(addprefix src/core/,$(addsuffix .cc,$(CORE))) $(LDLIBS) -o $@
 
 vision-sanitize: build/vision-tests-sanitized build/vision.ternobj build/vision-reference.ternobj
@@ -239,7 +265,7 @@ explorer-check: build/explorer-tests build/explorer.ternobj
 	build/explorer-tests build/explorer.ternobj > build/explorer-tests.log 2>&1 || { tail -30 build/explorer-tests.log; exit 1; }
 	@tail -1 build/explorer-tests.log
 
-build/explorer-tests-sanitized: tests/explorer_tests.cc src/explorer.cc src/explorer.h src/explorer_protocol.h src/runtime.cc src/runtime.h $(wildcard src/core/*.cc src/core/*.h) Makefile | build
+build/explorer-tests-sanitized: tests/explorer_tests.cc src/explorer.cc src/explorer.h src/explorer_protocol.h src/runtime.cc src/runtime.h src/display_protocol.h $(wildcard src/core/*.cc src/core/*.h) Makefile | build
 	$(CXX) $(CPPFLAGS) -Isrc -std=c++17 -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer tests/explorer_tests.cc src/explorer.cc src/runtime.cc $(addprefix src/core/,$(addsuffix .cc,$(CORE))) $(LDLIBS) -o $@
 
 explorer-sanitize: build/explorer-tests-sanitized build/explorer.ternobj

@@ -3,6 +3,8 @@
 #include "runtime.h"
 #include "breach_protocol.h"
 #include "game_input.h"
+#include "game_audio.h"
+#include "display_protocol.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -18,6 +20,8 @@ static void require(bool condition,const char* message) {
 struct Game {
     tunguska::Runtime runtime;
     uint64_t maxFrameInstructions=0;
+    uint32_t sounds=0;
+    uint32_t allSounds=0;
     explicit Game(const char* image):runtime(image){ready(-1);}
     int byte(int address){return runtime.cpu().memref(address).to_int();}
     int word(int address){return tryte::word_to_int(runtime.cpu().memref(address),runtime.cpu().memref(address+1));}
@@ -28,6 +32,8 @@ struct Game {
         const auto revision=runtime.frame().revision;
         while(runtime.cycles()-start<4000000) {
             runtime.run(256);
+            sounds |= tunguska::drainGameSounds(runtime.cpu());
+            allSounds |= sounds;
             if(runtime.frame().revision!=revision && word(BR_FRAME)!=previous && word(BR_FRAME)>0 && byte(BR_STATUS)!=1) {
                 maxFrameInstructions=std::max(maxFrameInstructions,runtime.cycles()-start);return;
             }
@@ -35,7 +41,7 @@ struct Game {
         std::cerr<<"PC="<<runtime.programCounter()<<" status="<<byte(BR_STATUS)<<" frame="<<word(BR_FRAME)<<'\n';
         throw std::runtime_error("Guest frame exceeded four million instructions");
     }
-    void key(char key){int previous=word(BR_FRAME);runtime.key(key);ready(previous);}
+    void key(char key){sounds=0;int previous=word(BR_FRAME);runtime.key(key);ready(previous);}
     void restart(){key('r');require(byte(BR_STATUS)==BR_READY,"Restart did not restore ready state");}
     void position(int x,int y,int angle){word(BR_X,x);word(BR_Y,y);word(BR_ANGLE,angle);}
     void dump(const char* file){runtime.capture(true);std::ofstream out(file,std::ios::binary);const auto& p=runtime.frame().pixels;out.write(reinterpret_cast<const char*>(p.data()),p.size());}
@@ -80,12 +86,17 @@ int main(int argc,char** argv) {
         const auto start=std::chrono::steady_clock::now();
         Game g(argc>1?argv[1]:"build/breach.ternobj");
         require(g.byte(BR_STATUS)==BR_READY && g.byte(BR_HEALTH)==9,"Boot state wrong");
-        require(g.runtime.frame().mode==-1 && g.runtime.frame().auxiliary==1,"Expected ternary raster display");
-        std::set<int> colors;for(size_t i=0;i<g.runtime.frame().pixels.size();i+=4)colors.insert(g.runtime.frame().pixels[i]);
-        require(colors==std::set<int>({0,112,224}),"Frame did not use the three ternary pixel colors");
+        require(g.runtime.frame().mode==-1 && g.runtime.frame().auxiliary==-1,"Expected guest palette-color display");
+        std::set<int> colors;
+        const auto& pixels=g.runtime.frame().pixels;
+        for(size_t i=0;i<pixels.size();i+=4)colors.insert((pixels[i]<<16)|(pixels[i+1]<<8)|pixels[i+2]);
+        require(colors.size()>=10,"Frame lacks distinct guest colors");
+        require(colors.count((224<<16)|(84<<8)|28),"Sentinel is not orange-red");
+        require(g.sounds&(1u<<BR_SOUND_START),"Missing start sound");
         if(argc>2)g.dump(argv[2]);
         std::cout<<"Boot frame: "<<g.runtime.cycles()<<" guest instructions\n"<<std::flush;
         int y=g.word(BR_Y);g.key('w');require(g.word(BR_Y)==y+27,"Forward movement failed");
+        require(g.sounds&(1u<<BR_SOUND_STEP),"Missing footstep sound");
         g.key('s');require(g.word(BR_Y)==y,"Backward movement failed");
         g.key('a');require(g.word(BR_ANGLE)==8,"Left turn failed");g.key('d');require(g.word(BR_ANGLE)==9,"Right turn failed");
         g.key('q');require(g.word(BR_X)==148,"Strafe failed");g.key('e');require(g.word(BR_X)==121,"Reverse strafe failed");
@@ -93,12 +104,15 @@ int main(int argc,char** argv) {
         g.position(100,121,18);g.key('w');require(g.word(BR_X)==100,"Player entered a wall");
         g.restart();g.position(202,202,9);g.key(' ');
         require(g.byte(BR_ENEMIES)==0 && g.byte(BR_KILLS)==1 && g.byte(BR_AMMO)==15,"Visible sentinel was not hit");
+        require((g.sounds & ((1u<<BR_SOUND_SHOT)|(1u<<BR_SOUND_KILL)))==((1u<<BR_SOUND_SHOT)|(1u<<BR_SOUND_KILL)),"Missing shot/kill sounds");
         g.restart();g.position(121,283,0);g.key(' ');
         require(g.byte(BR_ENEMIES+1)==1 && g.byte(BR_KILLS)==0,"Weapon shot through a wall");
         g.byte(BR_AMMO,0);g.position(202,202,9);g.key(' ');
         require(g.byte(BR_AMMO)==0 && g.byte(BR_ENEMIES)==1,"Empty weapon fired");
+        require(g.sounds==(1u<<BR_SOUND_EMPTY),"Empty weapon sound wrong");
         g.byte(BR_HEALTH,1);g.word(BR_TURN,3);g.key('a');
         require(g.byte(BR_STATUS)==BR_DEAD,"Sentinel damage/death failed");
+        require((g.sounds & ((1u<<BR_SOUND_HIT)|(1u<<BR_SOUND_DEAD)))==((1u<<BR_SOUND_HIT)|(1u<<BR_SOUND_DEAD)),"Missing damage/death sounds");
         int deadX=g.word(BR_X);g.key('w');require(g.word(BR_X)==deadX,"Dead player moved");
         g.restart();require(g.byte(BR_AMMO)==16 && g.byte(BR_KILLS)==0 && g.byte(BR_CELLS)==0,"Restart did not reset inventory");
         // A burst must preserve the shot behind movement events while a frame draws.
@@ -114,7 +128,15 @@ int main(int argc,char** argv) {
         require(g.byte(BR_HEALTH)==9 && g.byte(BR_AMMO)==13,"Supply cache did not replenish inventory");
         g.reach(10*12+7);require(g.byte(BR_CELLS)==3,"Third cell was not collected");
         g.reach(1*12+10);require(g.byte(BR_STATUS)==BR_WON,"Complete route did not reach victory");
+        require((g.allSounds & ((1u<<BR_SOUND_CELL)|(1u<<BR_SOUND_SUPPLY)|(1u<<BR_SOUND_WIN)))==
+                ((1u<<BR_SOUND_CELL)|(1u<<BR_SOUND_SUPPLY)|(1u<<BR_SOUND_WIN)),"Missing pickup/supply/victory sounds");
         g.restart();require(g.byte(BR_MAP+3*12+4)==2,"Restart failed to restore pickups");
+        // A slow or absent host must not let guest audio overwrite unread events.
+        g.byte(BR_AUDIO_HEAD,0);g.byte(BR_AUDIO_TAIL,26);
+        for(int i=0;i<26;++i)g.byte(BR_AUDIO_QUEUE+i,BR_SOUND_CELL);
+        g.runtime.key(' ');g.runtime.run(1000000);
+        require(g.byte(BR_AUDIO_TAIL)==26 && g.byte(BR_AUDIO_HEAD)==0,"Full audio ring was overwritten");
+        require(tunguska::drainGameSounds(g.runtime.cpu())==(1u<<BR_SOUND_CELL),"Audio overflow replaced unread events");
         require(g.maxFrameInstructions<350000,"Frame exceeds the optimized interactive guest budget");
         std::cout<<"PASS ternary guest: movement, wall collisions, turning, strafe, map, shooting, occlusion, ammo, damage, death, restart, supplies and complete collectible/exit route. Max frame "
                  <<g.maxFrameInstructions<<" instructions; "<<std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count()<<" seconds.\n";

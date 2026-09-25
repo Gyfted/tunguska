@@ -20,12 +20,18 @@ python3 scripts/release.py prepare
 
 This exports `HEAD` to a clean source directory, builds an arm64/x86_64 universal
 app, runs core, sanitizer, security, assembler, compiler, image-mutation, Vision,
-Explorer, Breach, GPU, search, AppKit, sandbox and release-gate tests, checks the actual
+Explorer, Breach, audio, GPU, search, AppKit, sandbox and release-gate tests, checks the actual
 signature/entitlements and architecture slices, and packages the app. Use
 `--ref <tag-or-commit>` for a different committed source or `--archs arm64` for
 a native-only candidate. Existing candidate directories are never overwritten.
 Changing `ARCHS` in an existing Make build directory requires a fresh build;
 the release script always starts from a clean export.
+
+The audio gates check the synthesized waveforms and guest event bounds under
+ASan/UBSan, then exercise the real AVAudioEngine callback silently. The latter
+requires a working macOS output device and access to Core Audio. Run release
+preparation outside a command sandbox that denies audio components; the app's
+own App Sandbox permits output without extra entitlements.
 
 Artifacts are under `build/releases/<version>-<commit>/`:
 

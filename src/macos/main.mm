@@ -8,9 +8,11 @@
 #import "SearchWindow.h"
 #import "FileAccess.h"
 #import "Interface.h"
+#import "GameAudio.h"
 #include "runtime.h"
 #include "breach_protocol.h"
 #include "game_input.h"
+#include "game_audio.h"
 #include <deque>
 #include <algorithm>
 #include <cmath>
@@ -181,6 +183,9 @@ static NSColor *RGB(unsigned rgb) {
 @property(strong) ScreenView *screen;
 @property(strong) NSButton *runButton;
 @property(strong) NSButton *stepButton;
+@property(strong) NSButton *soundButton;
+@property(strong) GameAudio *gameAudio;
+@property(nonatomic) BOOL soundMuted;
 @property(strong) NSMenu *appearanceMenu;
 @property(strong) NSTextField *status;
 @property(strong) NSTextField *metrics;
@@ -258,7 +263,10 @@ static NSColor *RGB(unsigned rgb) {
     NSStackView *header = TGStack(@[machineTitle, TGSpacer(), self.runButton, self.stepButton, debug], NO, 10);
     NSButton *reset = TGButton(@"Reset", @"arrow.counterclockwise", self, @selector(reset:));
     reset.toolTip = @"Reload the current image, reset memory and eject the disk (⌘R).";
-    NSStackView *state = TGStack(@[self.status, TGText(@"−1   0   +1", 12, YES)]);
+    self.soundMuted = [NSUserDefaults.standardUserDefaults boolForKey:@"TGBreachSoundMuted"];
+    self.soundButton = TGButton(@"Sound on", @"speaker.wave.2", self, @selector(toggleSound:));
+    self.soundButton.hidden = YES;
+    NSStackView *state = TGStack(@[self.status, TGText(@"−1   0   +1", 12, YES), TGSpacer(), self.soundButton]);
     self.screen = [[ScreenView alloc] initWithFrame:NSZeroRect];
     __weak AppDelegate *weakSelf = self;
     self.screen.input = ^(NSString *text) { [weakSelf enqueue:text]; };
@@ -293,6 +301,7 @@ static NSColor *RGB(unsigned rgb) {
         [header.leadingAnchor constraintEqualToAnchor:rail.trailingAnchor constant:24], [header.trailingAnchor constraintEqualToAnchor:root.trailingAnchor constant:-24],
         [header.topAnchor constraintEqualToAnchor:root.topAnchor constant:20],
         [state.leadingAnchor constraintEqualToAnchor:header.leadingAnchor], [state.topAnchor constraintEqualToAnchor:header.bottomAnchor constant:20],
+        [state.trailingAnchor constraintEqualToAnchor:header.trailingAnchor],
         [self.screen.leadingAnchor constraintEqualToAnchor:header.leadingAnchor], [self.screen.trailingAnchor constraintEqualToAnchor:header.trailingAnchor],
         [self.screen.topAnchor constraintEqualToAnchor:state.bottomAnchor constant:12], [self.screen.bottomAnchor constraintEqualToAnchor:hint.topAnchor constant:-12],
         [hint.leadingAnchor constraintEqualToAnchor:header.leadingAnchor], [hint.trailingAnchor constraintEqualToAnchor:header.trailingAnchor],
@@ -335,6 +344,7 @@ static NSColor *RGB(unsigned rgb) {
     NSMenuItem *machine = [[NSMenuItem alloc] init]; [bar addItem:machine];
     machine.submenu = [[NSMenu alloc] initWithTitle:@"Machine"];
     [machine.submenu addItemWithTitle:@"Run / Pause" action:@selector(toggleRun:) keyEquivalent:@"p"];
+    [machine.submenu addItemWithTitle:@"Mute Game Sound" action:@selector(toggleSound:) keyEquivalent:@"u"];
     [machine.submenu addItemWithTitle:@"Step Instruction" action:@selector(step:) keyEquivalent:@"."];
     [machine.submenu addItemWithTitle:@"Show Debugger" action:@selector(showDebugger:) keyEquivalent:@"d"];
     [machine.submenu addItemWithTitle:@"Reset Image" action:@selector(reset:) keyEquivalent:@"r"];
@@ -389,6 +399,10 @@ static NSColor *RGB(unsigned rgb) {
 - (BOOL)applicationShouldHandleReopen:(NSApplication *)app hasVisibleWindows:(BOOL)visible { [self showComputer:nil]; return YES; }
 - (BOOL)validateMenuItem:(NSMenuItem *)item {
     SEL action = item.action;
+    if (action == @selector(toggleSound:)) {
+        item.state = self.soundMuted ? NSControlStateValueOn : NSControlStateValueOff;
+        return self.screen.gameMode && self.gameAudio.available;
+    }
     if (action == @selector(toggleRun:) || action == @selector(step:) || action == @selector(reset:) ||
         action == @selector(sendBreak:) || action == @selector(showDebugger:) || action == @selector(openImage:) || action == @selector(mountDisk:) ||
         action == @selector(saveDisk:) || action == @selector(ejectDisk:) || action == @selector(bootOriginal:) || action == @selector(boot3CC:))
@@ -413,6 +427,10 @@ static NSColor *RGB(unsigned rgb) {
         const BOOL breach = [url.lastPathComponent isEqual:@"breach.ternobj"];
         self.screen.gameMode = breach;
         [self.screen clearGameInput];
+        [self.gameAudio silence];
+        if (breach && !self.gameAudio) self.gameAudio = [[GameAudio alloc] init];
+        if (!breach) self.gameAudio = nil;
+        self.soundButton.hidden = !breach;
         if (breach) self.imageLabel.stringValue = @"Ternary Breach · original guest game";
         self.inputHint.stringValue = breach ? @"W/S move · A/D turn · Q/E strafe · Space fire · M map · R restart · ⌘B return to OS" : @"Click the display to type · HELP lists commands · Esc sends Break · ⌘V pastes";
         self.screen.accessibilityHelp = self.inputHint.stringValue;
@@ -446,10 +464,12 @@ static NSColor *RGB(unsigned rgb) {
         _runtime->key(_input.front()); _input.pop_front();
         _nextInputCycle = _runtime->cycles() + 5000;
     }
-    // The guest game needs more instructions per picture; retain the same UI
-    // time limit and execute every instruction through the original interpreter.
+    // The extra color stores get a slightly larger bounded slice while leaving
+    // time in each 60 Hz tick for AppKit and input. All instructions stay emulated.
     const BOOL drawingGame = game && (sentGameInput || _runtime->cpu().memref(BR_STATUS).to_int() == 1);
-    _runtime->run(drawingGame ? 100000 : 18000, 7, game);
+    _runtime->run(drawingGame ? 120000 : 18000, drawingGame ? 9 : 7, game);
+    if (game) [self.gameAudio playEffects:tunguska::drainGameSounds(_runtime->cpu())
+        audible:!self.soundMuted && _runtime->running() && self.window.isKeyWindow];
     if (_revision != _runtime->frame().revision) {
         _revision = _runtime->frame().revision;
         self.screen.needsDisplay = YES;
@@ -467,7 +487,14 @@ static NSColor *RGB(unsigned rgb) {
     self.runButton.image = [NSImage imageWithSystemSymbolName:_runtime->running() ? @"pause.fill" : @"play.fill" accessibilityDescription:nil];
     self.runButton.accessibilityLabel = self.runButton.title;
     self.status.textColor = _runtime->running() ? TGSuccessTextColor() : NSColor.secondaryLabelColor;
-    self.mode.stringValue = _runtime->frame().mode == 0 ? @"54 × 27 · Text mode" : _runtime->frame().mode == 1 ? @"Vector graphics" : _runtime->frame().auxiliary == 1 ? @"324 × 243 · 3 colors" : @"324 × 243 · 729 colors";
+    self.mode.stringValue = _runtime->frame().mode == 0 ? @"54 × 27 · Text mode" : _runtime->frame().mode == 1 ? @"Vector graphics" : _runtime->frame().auxiliary == 1 ? @"324 × 243 · 3 colors" : _runtime->frame().auxiliary == -1 ? @"324 × 243 · Palette color" : @"324 × 243 · 729 colors";
+    if (self.screen.gameMode) {
+        self.soundButton.enabled = self.gameAudio.available;
+        self.soundButton.title = !self.gameAudio.available ? @"Sound unavailable" : self.soundMuted ? @"Muted" : @"Sound on";
+        self.soundButton.image = [NSImage imageWithSystemSymbolName:self.soundMuted ? @"speaker.slash" : @"speaker.wave.2" accessibilityDescription:nil];
+        self.soundButton.accessibilityLabel = self.soundButton.title;
+        self.soundButton.toolTip = self.soundMuted ? @"Enable game sound (⌘U)." : @"Mute game sound (⌘U).";
+    }
     self.metrics.stringValue = [NSString stringWithFormat:@"531,441 trytes · 6 trits per tryte · %.0f K instructions/s · %llu executed", rate/1000, (unsigned long long)_runtime->cycles()];
     [self.debugger refresh];
 }
@@ -504,7 +531,15 @@ static NSColor *RGB(unsigned rgb) {
 }
 - (void)windowDidResignKey:(NSNotification *)notification {
     [self.screen clearGameInput];
+    [self.gameAudio silence];
     if (self.screen.gameMode) _input.clear();
+}
+- (void)toggleSound:(id)sender {
+    self.soundMuted = !self.soundMuted;
+    [NSUserDefaults.standardUserDefaults setBool:self.soundMuted forKey:@"TGBreachSoundMuted"];
+    if (self.soundMuted) [self.gameAudio silence];
+    [self updateStats];
+    [self.window makeFirstResponder:self.screen];
 }
 - (void)toggleRun:(id)sender { if (_runtime) { [self.screen clearGameInput]; if (self.screen.gameMode) _input.clear(); _runtime->setRunning(!_runtime->running()); [self updateStats]; [self.window makeFirstResponder:self.screen]; } }
 - (void)step:(id)sender { if (_runtime) { _runtime->step(); [self updateStats]; self.screen.needsDisplay = YES; } }

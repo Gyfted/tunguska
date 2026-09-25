@@ -53,11 +53,13 @@ Choose **Ternary Breach** in the sidebar or press **⌘5**. Recover three reacto
 cells, evade or disable four sentinels, and find the exit. **W/S** move, **A/D**
 turn, **Q/E** strafe, **Space** fires, **M** shows the map and **R** restarts.
 Hold movement/turn keys for continuous stepping without the typing-repeat delay.
-Version 0.14.1 reduces guest drawing work and interpreter overhead; the guide
-records the measured improvement and its limits.
+Version 0.15.0 adds colored scenery, distinct enemies and pickups, a bright muzzle
+flash and ten original synthesized sound effects. Click **Sound on / Muted** or
+press **⌘U** to mute; the setting is remembered.
 The original one-level game is compiled with 3CC: ray casting, sprites, collision,
-combat and HUD drawing all run on the ternary guest. It uses the existing
-324 × 243 three-color display and original graphics peripheral. This is a small
+combat and HUD drawing all run on the ternary guest. A new color-attribute display
+mode preserves the packed 324 × 243 bitmap, and guest commands drive a bounded
+native audio output device. This is a small
 Doom-style experiment with new assets, not original Doom or a performance claim.
 See [the game guide](docs/BREACH.md) for controls, architecture and tests.
 

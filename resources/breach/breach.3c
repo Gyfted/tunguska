@@ -3,6 +3,7 @@
 // Independent Mac fork, maintained by Vinny Lingham, 2026-09-25.
 // All simulation, ray casting, sprites and HUD drawing execute on the guest.
 #include "../../src/breach_protocol.h"
+#include "../../src/display_protocol.h"
 
 asm("SEI", "LAD breach_irq", "STX 265718", "STY 265719", "JSR main",
     "breach_idle: JMP breach_idle",
@@ -17,6 +18,7 @@ asm("SEI", "LAD breach_irq", "STX 265718", "STY 265719", "JSR main",
 #define WORD(a) (*(int*)(a))
 #define SCREEN ((char*)-264262)
 #define MAP ((char*)BR_MAP)
+#define ATTR ((char*)TG_VIDEO_ATTRIBUTES)
 #define PX WORD(BR_X)
 #define PY WORD(BR_Y)
 #define ANGLE WORD(BR_ANGLE)
@@ -25,6 +27,7 @@ asm("SEI", "LAD breach_irq", "STX 265718", "STY 265719", "JSR main",
 #define CELLS BYTE(BR_CELLS)
 #define KILLS BYTE(BR_KILLS)
 
+char paint;
 char redrawHUD;
 char previousHealth;char previousAmmo;char previousCells;char previousKills;char previousMessage;
 int rayDistance;
@@ -50,35 +53,152 @@ void column(char x,char top,char bottom,char ink) {
     if((x<0)||(x>=54))return;
     if(top<26)top=26;if(bottom>205)bottom=205;
     if(bottom<=top)return;
-    WORD(80030)=-264262+(int)top*54+x;BYTE(80032)=(bottom-top)/6;
-    BYTE(80038)=(bottom-top)%6;BYTE(80033)=ink;
-    // Six rows per loop amortize guest address arithmetic and branches.
-    asm("LDA 80032", "JEQ breach_column_tail", "LDA 80033",
-        "breach_column_block: LDY #0", "STA (80030),Y",
-        "LDY #54", "STA (80030),Y", "LDY #108", "STA (80030),Y",
-        "LDY #162", "STA (80030),Y", "LDY #216", "STA (80030),Y",
-        "LDY #270", "STA (80030),Y",
-        "LDX 80030", "LDY 80031", "PSH #0", "PSH #324", "ADW X,Y",
-        "STX 80030", "STY 80031", "DEC 80032", "JGT breach_column_block",
-        "breach_column_tail: LDA 80038", "JEQ breach_column_end",
-        "LDX 80030", "LDY 80031", "LDA 80033", "breach_column_pixel: STA X,Y",
-        "PSH #0", "PSH #54", "ADW X,Y", "DEC 80038", "JGT breach_column_pixel",
+    WORD(80030)=-264262+(int)top*54+x;
+    BYTE(80032)=(bottom-top)/6;BYTE(80038)=(bottom-top)%6;
+    BYTE(80033)=ink;BYTE(80046)=paint;
+    // Guest bitmap and attribute planes advance together. Their base addresses
+    // differ by exactly 18 high trytes; XAX keeps ink and palette in registers.
+    asm("LDA 80030", "CLC", "ADD #18", "STA 80042", "LDA 80031", "STA 80043",
+        "LDA 80032",
+        "JEQ breach_column_tail",
+        "LDA 80033",
+        "breach_column_block: LDX 80046",
+        "LDY #0",
+        "STA (80030),Y",
+        "XAX",
+        "STA (80042),Y",
+        "XAX",
+        "LDY #54",
+        "STA (80030),Y",
+        "XAX",
+        "STA (80042),Y",
+        "XAX",
+        "LDY #108",
+        "STA (80030),Y",
+        "XAX",
+        "STA (80042),Y",
+        "XAX",
+        "LDY #162",
+        "STA (80030),Y",
+        "XAX",
+        "STA (80042),Y",
+        "XAX",
+        "LDY #216",
+        "STA (80030),Y",
+        "XAX",
+        "STA (80042),Y",
+        "XAX",
+        "LDY #270",
+        "STA (80030),Y",
+        "XAX",
+        "STA (80042),Y",
+        "XAX",
+        "LDX 80030",
+        "LDY 80031",
+        "PSH #0",
+        "PSH #324",
+        "ADW X,Y",
+        "STX 80030",
+        "STY 80031",
+        "STY 80043",
+        "TXA",
+        "CLC",
+        "ADD #18",
+        "STA 80042",
+        "LDA 80033",
+        "DEC 80032",
+        "JGT breach_column_block",
+        "breach_column_tail: LDA 80038",
+        "JEQ breach_column_end",
+        "LDA 80033",
+        "LDX 80046",
+        "LDY #0",
+        "STA (80030),Y",
+        "XAX",
+        "STA (80042),Y",
+        "XAX",
+        "DEC 80038",
+        "JEQ breach_column_end",
+        "LDY #54",
+        "STA (80030),Y",
+        "XAX",
+        "STA (80042),Y",
+        "XAX",
+        "DEC 80038",
+        "JEQ breach_column_end",
+        "LDY #108",
+        "STA (80030),Y",
+        "XAX",
+        "STA (80042),Y",
+        "XAX",
+        "DEC 80038",
+        "JEQ breach_column_end",
+        "LDY #162",
+        "STA (80030),Y",
+        "XAX",
+        "STA (80042),Y",
+        "XAX",
+        "DEC 80038",
+        "JEQ breach_column_end",
+        "LDY #216",
+        "STA (80030),Y",
+        "XAX",
+        "STA (80042),Y",
+        "XAX",
+        "DEC 80038",
+        "JEQ breach_column_end",
         "breach_column_end:");
 }
 void label(char* text,int x,int y) {
     int i=0;int code=0;
+    BYTE(80046)=paint;
     while((text[i]!=0)&&(x+i<54)) {
         code=text[i];if((code<0)||(code>=100))code=0;
         WORD(80034)=-264262+y*54+x+i;WORD(80036)=font+code*7;
-        // Copy each glyph with ordinary guest indirect-indexed loads/stores.
-        // Every six-trit row is one tryte; no native text renderer is involved.
-        asm("LDY #0", "LDA (80036),Y", "STA (80034),Y",
-            "LDY #1", "LDA (80036),Y", "LDY #54", "STA (80034),Y",
-            "LDY #2", "LDA (80036),Y", "LDY #108", "STA (80034),Y",
-            "LDY #3", "LDA (80036),Y", "LDY #162", "STA (80034),Y",
-            "LDY #4", "LDA (80036),Y", "LDY #216", "STA (80034),Y",
-            "LDY #5", "LDA (80036),Y", "LDY #270", "STA (80034),Y",
-            "LDY #6", "LDA (80036),Y", "LDY #324", "STA (80034),Y");
+        asm("LDA 80034", "CLC", "ADD #18", "STA 80044", "LDA 80035", "STA 80045",
+            "LDX 80046",
+            "LDY #0",
+            "LDA (80036),Y",
+            "LDY #0",
+            "STA (80034),Y",
+            "TXA",
+            "STA (80044),Y",
+            "LDY #1",
+            "LDA (80036),Y",
+            "LDY #54",
+            "STA (80034),Y",
+            "TXA",
+            "STA (80044),Y",
+            "LDY #2",
+            "LDA (80036),Y",
+            "LDY #108",
+            "STA (80034),Y",
+            "TXA",
+            "STA (80044),Y",
+            "LDY #3",
+            "LDA (80036),Y",
+            "LDY #162",
+            "STA (80034),Y",
+            "TXA",
+            "STA (80044),Y",
+            "LDY #4",
+            "LDA (80036),Y",
+            "LDY #216",
+            "STA (80034),Y",
+            "TXA",
+            "STA (80044),Y",
+            "LDY #5",
+            "LDA (80036),Y",
+            "LDY #270",
+            "STA (80034),Y",
+            "TXA",
+            "STA (80044),Y",
+            "LDY #6",
+            "LDA (80036),Y",
+            "LDY #324",
+            "STA (80034),Y",
+            "TXA",
+            "STA (80044),Y");
         i++;
     }
 }
@@ -93,17 +213,17 @@ int wall(int x,int y) {
 // Integer DDA; distances are perpendicular camera distances in 1/81-cell units.
 void cast(int rx,int ry) {
     int mx=PX/81;int my=PY/81;int sx=1;int sy=1;
-    int dx=20000;int dy=20000;int tx=20000;int ty=20000;int i=0;
-    if(rx<0)sx=-1;if(ry<0)sy=-1;
+    int dx=20000;int dy=20000;int tx=20000;int ty=20000;int i=0;int ax=rx;int ay=ry;
+    if(rx<0){sx=-1;ax=-rx;}if(ry<0){sy=-1;ay=-ry;}
     if(rx!=0) {
-        dx=6561/absolute(rx);
-        if(sx>0)tx=((mx+1)*81-PX)*81/absolute(rx);
-        else tx=(PX-mx*81)*81/absolute(rx);
+        dx=6561/ax;
+        if(sx>0)tx=((mx+1)*81-PX)*81/ax;
+        else tx=(PX-mx*81)*81/ax;
     }
     if(ry!=0) {
-        dy=6561/absolute(ry);
-        if(sy>0)ty=((my+1)*81-PY)*81/absolute(ry);
-        else ty=(PY-my*81)*81/absolute(ry);
+        dy=6561/ay;
+        if(sy>0)ty=((my+1)*81-PY)*81/ay;
+        else ty=(PY-my*81)*81/ay;
     }
     rayDistance=20000;raySide=0;rayCell=1;
     for(i=0;i<24;i++) {
@@ -120,9 +240,18 @@ int visible(int x,int y) {
     if(rayDistance>=length-8)return 1;
     return 0;
 }
+// Publish event IDs only; the Mac audio peripheral supplies the oscillator.
+// Full queues drop new effects. The producer publishes the tail last.
+void sound(char effect) {
+    char next=(BYTE(BR_AUDIO_TAIL)+1)%BR_AUDIO_SLOTS;
+    if(next==BYTE(BR_AUDIO_HEAD))return;
+    BYTE(BR_AUDIO_QUEUE+BYTE(BR_AUDIO_TAIL))=effect;BYTE(BR_AUDIO_TAIL)=next;
+}
 void restart() {
     int i=0;
     redrawHUD=1;
+    for(i=0;i<36;i++)BYTE(TG_VIDEO_PALETTE_ZERO+i)=palette[i];
+    sound(BR_SOUND_START);
     for(i=0;i<144;i++)MAP[i]=level[i];
     for(i=0;i<4;i++)BYTE(BR_ENEMIES+i)=1;
     PX=121;PY=121;ANGLE=9;HEALTH=9;AMMO=16;CELLS=0;KILLS=0;
@@ -130,23 +259,24 @@ void restart() {
     BYTE(BR_MESSAGE)=0;BYTE(BR_STATUS)=1;
 }
 void move(int dx,int dy) {
-    int x=PX+dx;int y=PY+dy;
+    int x=PX+dx;int y=PY+dy;int oldX=PX;int oldY=PY;
     // A ten-unit radius keeps the player away from wall faces and corners.
     if((wall(x-10,PY-10)==0)&&(wall(x+10,PY-10)==0)&&
        (wall(x-10,PY+10)==0)&&(wall(x+10,PY+10)==0))PX=x;
     if((wall(PX-10,y-10)==0)&&(wall(PX+10,y-10)==0)&&
        (wall(PX-10,y+10)==0)&&(wall(PX+10,y+10)==0))PY=y;
+    if((PX!=oldX)||(PY!=oldY))sound(BR_SOUND_STEP);
 }
 void collect() {
     int cell=(PY/81)*12+PX/81;int tile=MAP[cell];
-    if(tile==2){CELLS++;MAP[cell]=0;BYTE(BR_MESSAGE)=1;}
-    if(tile==3){HEALTH=9;AMMO=minimum(AMMO+12,99);MAP[cell]=0;BYTE(BR_MESSAGE)=2;}
-    if(tile==4){if(CELLS==3)BYTE(BR_STATUS)=BR_WON;else BYTE(BR_MESSAGE)=3;}
+    if(tile==2){CELLS++;MAP[cell]=0;BYTE(BR_MESSAGE)=1;sound(BR_SOUND_CELL);}
+    if(tile==3){HEALTH=9;AMMO=minimum(AMMO+12,99);MAP[cell]=0;BYTE(BR_MESSAGE)=2;sound(BR_SOUND_SUPPLY);}
+    if(tile==4){if(CELLS==3){BYTE(BR_STATUS)=BR_WON;sound(BR_SOUND_WIN);}else BYTE(BR_MESSAGE)=3;}
 }
 void shoot() {
     int i=0;int target=-1;int best=20000;int dx=0;int dy=0;int depth=0;int side=0;
-    if(AMMO<=0){BYTE(BR_MESSAGE)=4;return;}
-    AMMO--;BYTE(BR_FLASH)=1;
+    if(AMMO<=0){BYTE(BR_MESSAGE)=4;sound(BR_SOUND_EMPTY);return;}
+    AMMO--;BYTE(BR_FLASH)=1;sound(BR_SOUND_SHOT);
     for(i=0;i<4;i++){if(BYTE(BR_ENEMIES+i)==1){
         dx=objectX[i]-PX;dy=objectY[i]-PY;
         depth=(dx*directionX+dy*directionY)/81;
@@ -155,7 +285,7 @@ void shoot() {
             if(visible(objectX[i],objectY[i])==1){target=i;best=depth;}
         }
     }}
-    if(target>=0){BYTE(BR_ENEMIES+target)=0;KILLS++;BYTE(BR_MESSAGE)=5;}
+    if(target>=0){BYTE(BR_ENEMIES+target)=0;KILLS++;BYTE(BR_MESSAGE)=5;sound(BR_SOUND_KILL);}
 }
 void sentinels() {
     int i=0;
@@ -163,10 +293,10 @@ void sentinels() {
     if(WORD(BR_TURN)%4!=0)return;
     for(i=0;i<4;i++){if(BYTE(BR_ENEMIES+i)==1){
         if(absolute(objectX[i]-PX)+absolute(objectY[i]-PY)<260){
-            if(visible(objectX[i],objectY[i])==1){HEALTH--;BYTE(BR_MESSAGE)=6;}
+            if(visible(objectX[i],objectY[i])==1){HEALTH--;BYTE(BR_MESSAGE)=6;sound(BR_SOUND_HIT);}
         }
     }}
-    if(HEALTH<=0){HEALTH=0;BYTE(BR_STATUS)=BR_DEAD;}
+    if(HEALTH<=0){HEALTH=0;BYTE(BR_STATUS)=BR_DEAD;sound(BR_SOUND_DEAD);}
 }
 void action(char key) {
     if((key>=50)&&(key<=75))key-=40;
@@ -195,6 +325,7 @@ void sprite(int id,int depth) {
     int dx=0;int dy=0;int side=0;int center=0;int h=0;
     int half=0;int top=0;int bottom=0;
     int col=0;int edge=0;int shape=0;
+    paint=3;if(id>=4)paint=4;if(id==7)paint=5;if(id==8)paint=6;
     dx=objectX[id]-PX;dy=objectY[id]-PY;
     side=(dy*directionX-dx*directionY)/81;
     center=27+side*40/depth;h=minimum(130,9720/depth);
@@ -218,33 +349,32 @@ void sprite(int id,int depth) {
     }
 }
 void mapView() {
-    int x=0;int y=0;int r=0;int tile=0;int i=0;char ink=0;
+    int x=0;int y=0;int r=0;int tile=0;int i=0;int at=0;char ink=0;
     for(y=0;y<12;y++){for(x=0;x<12;x++){
         tile=MAP[y*12+x];ink=-364;
         if(tile==1)ink=0;if(tile>=2)ink=364;
-        for(r=0;r<5;r++)SCREEN[(32+y*6+r)*54+2+x]=ink;
+        for(r=0;r<5;r++){at=(32+y*6+r)*54+2+x;SCREEN[at]=ink;ATTR[at]=11;}
     }}
     SCREEN[(34+(PY/81)*6)*54+2+PX/81]=364;
     for(i=0;i<4;i++){if(BYTE(BR_ENEMIES+i)==1)
-        SCREEN[(34+(objectY[i]/81)*6)*54+2+objectX[i]/81]=121;}
+        {at=(34+(objectY[i]/81)*6)*54+2+objectX[i]/81;SCREEN[at]=121;ATTR[at]=3;}}
 }
 void render() {
     int col=0;int rx=0;int ry=0;int h=0;int top=0;int bottom=0;char ink=0;
-    int i=0;int j=0;int temp=0;int dx=0;int dy=0;
+    int i=0;int j=0;int temp=0;int dx=0;int dy=0;int rayBase=ANGLE*54;
     int ending=BYTE(BR_STATUS);
     BYTE(BR_STATUS)=1;
     directionX=cosine[ANGLE];directionY=cosine[(ANGLE+27)%36];
-    if(redrawHUD==1)fill(-264262,13122,-364);
-    else fill(-264262+26*54,82*54,-364);
+    if(redrawHUD==1){fill(-264262,13122,-364);fill(TG_VIDEO_ATTRIBUTES,13122,0);}
+    else {fill(-264262+26*54,82*54,-364);fill(TG_VIDEO_ATTRIBUTES+26*54,179*54,0);}
     fill(-264262+108*54,97*54,-273);
     for(i=109;i<205;i+=2)fill(-264262+i*54,54,-91);
     for(col=0;col<54;col++) {
-        rx=directionX-directionY*(col-27)*2/81;
-        ry=directionY+directionX*(col-27)*2/81;
+        rx=rayX[rayBase+col];ry=rayY[rayBase+col];
         cast(rx,ry);WORD(BR_DEPTH+col*2)=maximum(1,rayDistance);
         h=minimum(176,14256/maximum(1,rayDistance));top=108-h/2;bottom=108+h/2;
-        ink=0;if(raySide==1)ink=273;
-        if(rayDistance>400)ink=-273;
+        paint=1;ink=0;if(raySide==1)ink=273;
+        if(rayDistance>400){ink=-273;paint=2;}
         column(col,top,bottom,ink);
         column(col,top,top+2,364);column(col,bottom-2,bottom,-364);
         // Original industrial panel seams, generated entirely in guest code.
@@ -259,12 +389,13 @@ void render() {
     }}
     for(i=0;i<9;i++){j=order[i];if((active(j)==1)&&(objectDepth[j]>12))sprite(j,objectDepth[j]);}
     // Six-trit crosshair and a small original pulse-tool silhouette.
-    column(26,105,111,364);column(28,105,111,364);column(27,101,115,364);
-    for(col=23;col<=31;col++)column(col,190+absolute(col-27),205,0);
+    paint=9;column(26,105,111,364);column(28,105,111,364);column(27,101,115,364);
+    paint=7;for(col=23;col<=31;col++)column(col,190+absolute(col-27),205,0);
     for(col=26;col<=28;col++)column(col,171,201,364);
     column(27,174,199,-364);
-    if(BYTE(BR_FLASH)==1){for(col=24;col<=30;col++)column(col,158+absolute(col-27)*3,171,364);}
+    paint=8;if(BYTE(BR_FLASH)==1){for(col=24;col<=30;col++)column(col,158+absolute(col-27)*3,171,364);}
     if(BYTE(BR_MAP_VISIBLE)==1)mapView();
+    paint=9;
     if(redrawHUD==1) {
         label("TERNARY BREACH",2,5);label("RECOVER 3 CELLS THEN REACH THE EXIT",2,16);
         label("HEALTH",2,211);label("AMMO",15,211);label("CELLS",26,211);label("DRONES",38,211);
@@ -275,7 +406,7 @@ void render() {
     if((redrawHUD==1)||(CELLS!=previousCells))number(CELLS,32,211);
     if((redrawHUD==1)||(KILLS!=previousKills))number(KILLS,45,211);
     if((redrawHUD==1)||(BYTE(BR_MESSAGE)!=previousMessage)) {
-        fill(-264262+222*54,7*54,-364);
+        paint=10;fill(-264262+222*54,7*54,-364);fill(TG_VIDEO_ATTRIBUTES+222*54,7*54,10);
         if(BYTE(BR_MESSAGE)==0)label("FIND THE CELLS  AVOID OR DISABLE THE SENTINELS",2,222);
         if(BYTE(BR_MESSAGE)==1)label("REACTOR CELL RECOVERED",2,222);
         if(BYTE(BR_MESSAGE)==2)label("SUPPLIES COLLECTED  HEALTH RESTORED",2,222);
@@ -287,7 +418,7 @@ void render() {
     previousHealth=HEALTH;previousAmmo=AMMO;previousCells=CELLS;previousKills=KILLS;
     previousMessage=BYTE(BR_MESSAGE);redrawHUD=0;
     if((ending==BR_WON)||(ending==BR_DEAD)) {
-        fill(-264262+86*54,35*54,-364);
+        paint=10;fill(-264262+86*54,35*54,-364);fill(TG_VIDEO_ATTRIBUTES+86*54,35*54,10);
         if(ending==BR_WON)label("BREACH COMPLETE  YOU ESCAPED",13,93);
         else label("SIGNAL LOST",21,93);
         label("PRESS R TO RESTART",18,107);
@@ -295,11 +426,11 @@ void render() {
     WORD(BR_FRAME)=(WORD(BR_FRAME)+1)%10000;
     if((ending==BR_WON)||(ending==BR_DEAD))BYTE(BR_STATUS)=ending;
     else BYTE(BR_STATUS)=BR_READY;
-    BYTE(-265718)=7; // Publish only after the frame and its ready state are complete.
+    BYTE(-265718)=-11; // Publish only after the frame and its ready state are complete.
 }
 void main() {
     char key=0;int count=0;char* queue=(char*)BR_INPUT_QUEUE;
-    BYTE(BR_INPUT_HEAD)=0;BYTE(BR_INPUT_TAIL)=0;WORD(BR_FRAME)=0;restart();asm("CLI");render();
+    BYTE(BR_INPUT_HEAD)=0;BYTE(BR_INPUT_TAIL)=0;BYTE(BR_AUDIO_HEAD)=0;BYTE(BR_AUDIO_TAIL)=0;WORD(BR_FRAME)=0;restart();asm("CLI");render();
     while(1) {
         if(BYTE(BR_INPUT_HEAD)!=BYTE(BR_INPUT_TAIL)) {
             if(BYTE(BR_STATUS)==BR_READY)BYTE(BR_STATUS)=1;

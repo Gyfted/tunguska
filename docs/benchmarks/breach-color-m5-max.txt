@@ -1,0 +1,19 @@
+Ternary Breach color/sound update — 2026-09-25
+Apple M5 Max, arm64, macOS 27, optimized native development build.
+Candidate: 0.15.0 color guest; reference: 0.14.1 guest from source
+45e3b9aceb37a8fae34581538e98b6ab77deeb28. Both use the current interpreter.
+
+Command:
+build/breach-performance build/breach.ternobj build/breach-color/monochrome.ternobj
+
+Policies: candidate 120,000 instructions / 9 ms during active drawing;
+reference 100,000 / 7 ms. Both idle at 18,000 / 7 ms and yield at frame capture.
+210 frames: boot, movement, firing, map, restart and all 36 headings at five
+positions. Compare the complete packed bitmap geometry and guest game state;
+RGB intentionally differs. Audio commands are drained but actual audio callback
+CPU, AppKit presentation, timer sleeps and physical input latency are excluded.
+The 60 Hz tick estimate is not measured end-to-end latency or guaranteed FPS.
+
+candidate: 210 frames; CPU ms p50=15.5823 p95=22.2333; 60Hz tick estimate ms p50=33.3333 p95=50; instructions p50=207040 max=316682
+reference: 210 frames; CPU ms p50=13.7776 p95=19.4548; 60Hz tick estimate ms p50=33.3333 p95=50; instructions p50=177592 max=276708
+PASS exact guest geometry masks and state for every paired frame

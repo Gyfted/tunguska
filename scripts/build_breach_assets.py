@@ -76,10 +76,29 @@ def generate():
         if not (10 <= code <= 45):
             table[code*7:code*7+7] = [-364]*7
     symbols = {'#':1, '.':0, 'C':2, 'A':3, 'X':4}
+    cosine = [round(81*math.cos(i*math.pi/18)) for i in range(36)]
     arrays = {
         'level': [symbols[c] for row in MAP for c in row],
-        'cosine': [round(81*math.cos(i*math.pi/18)) for i in range(36)],
+        'cosine': cosine,
+        'rayX': [cosine[a]-int(cosine[(a+27)%36]*(c-27)*2/81) for a in range(36) for c in range(54)],
+        'rayY': [cosine[(a+27)%36]+int(cosine[a]*(c-27)*2/81) for a in range(36) for c in range(54)],
         'font': table,
+        # Original three-tone palettes; RGB components use the machine's 0..8
+        # channel levels. The guest copies these values into video memory.
+        'palette': [r*81+g*9+b-364 for r,g,b in [
+            (0,0,1),(1,1,2),(2,2,3),  # background/floor
+            (0,1,2),(1,4,4),(3,7,7),  # teal walls
+            (0,1,2),(1,2,3),(2,4,5),  # distant walls
+            (0,0,0),(5,1,0),(8,3,1),  # sentinels
+            (0,1,1),(1,4,1),(5,8,2),  # reactor cells
+            (0,0,1),(0,4,5),(2,8,8),  # supplies
+            (1,0,2),(3,1,5),(7,3,8),  # exit
+            (0,0,0),(2,3,4),(6,7,8),  # pulse tool
+            (3,0,0),(8,3,0),(8,8,3),  # muzzle flash
+            (0,0,1),(2,5,5),(6,8,8),  # HUD
+            (0,0,1),(5,3,0),(8,6,2),  # messages
+            (0,0,1),(1,3,4),(8,7,3),  # map
+        ]],
     }
     return '// Generated original Ternary Breach assets. GPL-2.0-or-later.\n' + '\n'.join(
         'char '+name+'['+str(len(values))+'] = {'+','.join(map(str, values))+'};' for name, values in arrays.items())+'\n'
