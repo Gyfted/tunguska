@@ -17,6 +17,9 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+/* Mac fork security fixes — 2026-09-25: checked numeric parsing and bounded
+ * emission; original authorship and GPL-2.0-or-later terms retained. */
+
 
 %{
 #define YYERROR_VERBOSE
@@ -77,8 +80,8 @@ inc: 	_INC STRING { assembler::instance()->inc($<sval>2); }
 def_label: IDENTIFIER ':' { assembler::instance()->ldef($<sval>1); } ;
 equ:   EQU IDENTIFIER address { assembler::instance()->equ($<sval>2, $<ival>3); }
    	| IDENTIFIER EQU address { assembler::instance()->equ($<sval>1, $<ival>3); } ;
-rest:   REST num {{int i = 0; for(i = 0; i < $<ival>2; i++) assembler::instance()->dt(0); }}
-	| REST num ',' num {{ int i = 0; for(i = 0; i < $<ival>2; i++) assembler::instance()->dt($<ival>4); }}
+rest:   REST num { assembler::instance()->reserve($<ival>2); }
+	| REST num ',' num { assembler::instance()->reserve($<ival>2, $<ival>4); }
 	;
 dt:	DT dtlist;
 dtlist:  num{ assembler::instance()->dt($<ival>1); }
@@ -109,11 +112,11 @@ num:
 	| NONTRIP { $<ival>$ = nontriplet($<sval>1); }
 	| NONSEXT { $<ival>$ = nonsextet($<sval>1); }
 	| FLOATVAL { $<ival>$ = floatval($<sval>1); }
-	| '-' num { $<ival>$ = - $<ival>2; }
-	| num '+' num { $<ival>$ = $<ival>1 + $<ival>3; }
-	| num '-' num { $<ival>$ = $<ival>1 - $<ival>3; }
-	| num '*' num { $<ival>$ = $<ival>1 * $<ival>3; }
-	| num '/' num { $<ival>$ = $<ival>1 / $<ival>3; }
+	| '-' num { $<ival>$ = checked_assembly_integer(-int64_t($<ival>2)); }
+	| num '+' num { $<ival>$ = checked_assembly_integer(int64_t($<ival>1) + $<ival>3); }
+	| num '-' num { $<ival>$ = checked_assembly_integer(int64_t($<ival>1) - $<ival>3); }
+	| num '*' num { $<ival>$ = checked_assembly_integer(int64_t($<ival>1) * $<ival>3); }
+	| num '/' num { $<ival>$ = assembly_quotient($<ival>1, $<ival>3); }
 	| '{' num '}' { $<ival>$ = $<ival>2; }
 	| LOW num { $<ival>$ = lowtryte($<ival>2); } 
 	| HIGH num{ $<ival>$ = hightryte($<ival>2); } 

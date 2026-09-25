@@ -84,7 +84,8 @@ An interrupted wait can be resumed by rerunning the same command, without
 submitting a duplicate. After acceptance it staples the ticket, verifies it,
 and runs Gatekeeper assessment. It produces the final ZIP and `SHA256SUMS` only
 after those checks pass, and updates `READ-ME-FIRST.txt` to identify the final
-binary and its matching source. A changed source archive/bundle, missing identity,
+binary and its matching source. Re-verifying a notarized candidate also checks the
+final ZIP and exact SHA256SUMS contents. A changed source archive/bundle/ZIP, missing identity,
 extra entitlement, rejected submission or failed verification stops the process.
 
 The signing machine needs network access; the app itself has no network
@@ -111,7 +112,7 @@ Before publishing a binary release:
    compatible licensing. Preserve their original copyright and license notices.
 2. Add dated notices to modified original files. Keep AUTHORS, NOTICE.md and
    source provenance accurate; distinguish original work from fork changes.
-3. Run `make test sanitize security-check compiler-check compiler-sanitize vision-check vision-sanitize sandbox-check verify-app release-check` and build the app from a clean checkout.
+3. Run `make test sanitize security-check assembler-check assembler-sanitize image-fuzz-check compiler-check compiler-sanitize vision-check vision-sanitize sandbox-check verify-app release-check` and build the app from a clean checkout.
    Record the commit, architecture, compiler and macOS versions used.
 4. Tag the exact source commit used to build the binary. Publish a complete
    corresponding source archive from that tag, including all required source,

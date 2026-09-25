@@ -17,6 +17,9 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+/* Mac fork security hardening — 2026-09-25. Checked host arithmetic, bounded
+ * image input and guest diagnostics; original authorship and license retained. */
+
 /* Mac fork modification notice — 2026-09-24
  * Maintained by Vinny Lingham (https://github.com/Gyfted).
  * Validate images transactionally and encode little-endian storage explicitly.
@@ -35,17 +38,50 @@
 #include <cerrno>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <array>
 
 void memory::load(const char* filename) {
     if (!filename) throw std::runtime_error("No image path supplied");
-    std::unique_ptr<gzFile_s, decltype(&gzclose)> file(gzopen(filename, "rb"), gzclose);
-    if (!file) throw std::runtime_error("Cannot open memory image");
-    std::vector<unsigned char> bytes(MEMSIZ * 2 + 1);
-    const int count = gzread(file.get(), bytes.data(), static_cast<unsigned>(bytes.size()));
-    if (count != MEMSIZ * 2) throw std::runtime_error("Invalid image: expected 531441 little-endian trytes");
-    int code = Z_OK;
-    gzerror(file.get(), &code);
-    if (code != Z_OK && code != Z_STREAM_END) throw std::runtime_error("Corrupt compressed image");
+    // Open nonblocking before checking the descriptor: a FIFO or device must
+    // not stall the UI. Bound input too, including files that grow during read.
+    struct Input { int fd; ~Input() { if (fd >= 0) close(fd); } } input{open(filename, O_RDONLY | O_NONBLOCK | O_CLOEXEC)};
+    if (input.fd < 0) throw std::runtime_error("Cannot open memory image");
+    struct stat info;
+    if (fstat(input.fd, &info) || !S_ISREG(info.st_mode)) throw std::runtime_error("Choose a regular memory image file");
+    if (info.st_size < 0 || uint64_t(info.st_size) > max_image_bytes) throw std::runtime_error("Memory image exceeds the 8 MiB input limit");
+    std::vector<uint8_t> encoded;
+    std::array<uint8_t, 65536> chunk;
+    while (true) {
+        const ssize_t count = read(input.fd, chunk.data(), chunk.size());
+        if (count < 0) { if (errno == EINTR) continue; throw std::runtime_error("Cannot read memory image"); }
+        if (!count) break;
+        if (size_t(count) > max_image_bytes - encoded.size()) throw std::runtime_error("Memory image exceeds the 8 MiB input limit");
+        encoded.insert(encoded.end(), chunk.begin(), chunk.begin() + count);
+    }
+    load_bytes(encoded.data(), encoded.size());
+}
+
+void memory::load_bytes(const uint8_t* data, size_t size) {
+    if (!data || !size || size > max_image_bytes) throw std::runtime_error("Invalid or oversized memory image");
+    std::vector<uint8_t> bytes;
+    if (size >= 2 && data[0] == 0x1f && data[1] == 0x8b) {
+        bytes.resize(MEMSIZ * 2 + 1);
+        z_stream stream{};
+        if (inflateInit2(&stream, 16 + MAX_WBITS) != Z_OK) throw std::runtime_error("Cannot initialize image decompression");
+        struct Decoder { z_stream* stream; ~Decoder() { inflateEnd(stream); } } decoder{&stream};
+        stream.next_in = const_cast<Bytef*>(data); stream.avail_in = static_cast<uInt>(size);
+        stream.next_out = bytes.data(); stream.avail_out = static_cast<uInt>(bytes.size());
+        // Historical images are single gzip members. Reject trailing data and
+        // concatenated empty members instead of spending unbounded time on them.
+        const int result = inflate(&stream, Z_FINISH);
+        if (result != Z_STREAM_END || stream.avail_in || stream.total_out != MEMSIZ * 2)
+            throw std::runtime_error("Corrupt compressed image or incorrect image length");
+        bytes.resize(MEMSIZ * 2);
+    } else {
+        if (size != MEMSIZ * 2) throw std::runtime_error("Invalid image: expected 531441 little-endian trytes");
+        bytes.assign(data, data + size);
+    }
     std::vector<int> values(MEMSIZ);
     for (int i = 0; i < MEMSIZ; ++i) {
         int value = bytes[2*i] | (int(bytes[2*i+1]) << 8);
@@ -105,7 +141,7 @@ const tryte& memory::memref(int pos) const {
     const auto index = (shifted % MEMSIZ + MEMSIZ) % MEMSIZ;
     return mem[index];
 }
-tryte& memory::memrefi(int high, int low) { return memref(PODWORD_TO_INT(high, low)); }
+tryte& memory::memrefi(int high, int low) { return memref(int((int64_t(high) * 729 + low) % MEMSIZ)); }
 tryte& memory::memref(const tryte& high, const tryte& low) {
     return memref(tryte::word_to_int(high, low));
 }

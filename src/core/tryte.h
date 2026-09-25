@@ -17,6 +17,9 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+/* Mac fork security hardening — 2026-09-25. Checked host arithmetic, bounded
+ * image input and guest diagnostics; original authorship and license retained. */
+
 /* Mac fork modification notice — 2026-09-24
  * Maintained by Vinny Lingham (https://github.com/Gyfted).
  * Remove obsolete register declarations for C++17.
@@ -25,6 +28,7 @@
  */
 
 #include "trit.h"
+#include <cstdint>
 #ifndef tryte_h
 #define tryte_h
 
@@ -73,7 +77,7 @@ public:
 	/* Translata an integer into two trytes */
 	static void int_to_word(int value, tryte& high, tryte& low) {
 		low = value;
-		high = (value - low.to_int())/729;
+		high = int((int64_t(value) - low.to_int())/729);
 	}
 
 

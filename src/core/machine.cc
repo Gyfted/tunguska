@@ -17,6 +17,9 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+/* Mac fork security hardening — 2026-09-25. Checked host arithmetic, bounded
+ * image input and guest diagnostics; original authorship and license retained. */
+
 /* Mac fork modification notice — 2026-09-24
  * Maintained by Vinny Lingham (https://github.com/Gyfted).
  * Repair arithmetic/bounds issues, clean up state, and bound interrupts.
@@ -340,7 +343,7 @@ bool machine::instruction(const std::function<bool(int)>& pauseBefore) {
 		case PAUSE: pause(); break;
 		case DEBUG: debug(); break;
 
-		default: printf("%d: unknown opcode %d\n", ip, instruction.to_int());
+		default: if (allow_diagnostic()) printf("%d: unknown opcode %d\n", ip, instruction.to_int());
 	}
 
 	current_state->heartbeat();
@@ -376,13 +379,14 @@ void machine::pflagw(const tryte& t, const tryte& t2) {
 
 }
 void machine::pause() {
-	printf(" -- PAUSE by instruction (before %%%.3X%.3X)\n"
+	if (allow_diagnostic()) printf(" -- PAUSE by instruction (before %%%.3X%.3X)\n"
 	       "    (resume by pressing pause on keyboard)\n", 
 			PCH.nonaryhex(), PCL.nonaryhex());
 	set_state(new paused_state());
 }
 
 void machine::debug() {
+	if (!allow_diagnostic()) return;
 	tryte instruction = memref(PCH, PCL);
 	instruction = (instruction << 2) >> 2;
 	printf("---DEBUG---\n"
@@ -390,7 +394,7 @@ void machine::debug() {
 	printf("P: \tP%d\t V%d\t B%d\t I%d\t G%d\t C%d\n", P[PR].to_int(), P[V].to_int(), P[B].to_int(), P[I].to_int(), P[G].to_int(), P[C].to_int());
 	printf("S: %d\n", S.to_int());
 	printf("CL: %d\n", CL.to_int());
-	fflush(NULL);
+	fflush(stdout);
 }
 
 /* Truck load of nothing */
@@ -711,7 +715,7 @@ void machine::brk() {
 
 /* Return from Interrupt */
 void machine::rti() {
-	if((P[B].to_int()) <= 0) printf("RTI outside BRK\n");
+	if((P[B].to_int()) <= 0 && allow_diagnostic()) printf("RTI outside BRK\n");
 
 	A   = memref(SP,S); S += 1;
 	Y   = memref(SP,S); S += 1;

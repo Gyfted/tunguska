@@ -17,6 +17,9 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+/* Mac fork security hardening — 2026-09-25. Checked host arithmetic, bounded
+ * image input and guest diagnostics; original authorship and license retained. */
+
 /* Mac fork modification notice — 2026-09-24
  * Maintained by Vinny Lingham (https://github.com/Gyfted).
  * Define floating-point edge cases and report guest arithmetic errors.
@@ -86,7 +89,7 @@ void agdp::heartbeat(machine& m) {
 		case COP_WHEN: when(m); break;
 		case COP_IDIVW: divw(m); break;
 		case COP_IMODW: modw(m); break;
-		default: printf("Unknown or unimplemented "
+		default: if (m.allow_diagnostic()) printf("Unknown or unimplemented "
 				"AGDP instruction :-(\n");
 	}
 	} catch (const std::domain_error&) {
@@ -163,7 +166,7 @@ void agdp::blt(machine& m) {
 	int addr2 = tryte::word_to_int(m.memref(M_R2), m.memref(M_R2+1));
 	int length = tryte::word_to_int(m.memref(M_R3), m.memref(M_R3+1));
 
-	if(length < 0) printf("Warning: BLT with length < 0\n");
+	if(length < 0 && m.allow_diagnostic()) printf("Warning: BLT with length < 0\n");
 
 	int offset = 0;
 	if(addr1 + length > addr2) 
@@ -204,7 +207,7 @@ void agdp::bla(machine& m) {
 	int addr2 = tryte::word_to_int(m.memref(M_R2), m.memref(M_R2+1));
 	int length = tryte::word_to_int(m.memref(M_R3), m.memref(M_R3+1));
 
-	if(length < 0) printf("Warning: BLA with length < 0\n");
+	if(length < 0 && m.allow_diagnostic()) printf("Warning: BLA with length < 0\n");
 
 	int offset = 0;
 	if(addr1 + length > addr2) 
@@ -233,7 +236,7 @@ void agdp::blx(machine& m) {
 	int addr2 = tryte::word_to_int(m.memref(M_R2), m.memref(M_R2+1));
 	int length = tryte::word_to_int(m.memref(M_R3), m.memref(M_R3+1));
 
-	if(length < 0) printf("Warning: BLX with length < 0\n");
+	if(length < 0 && m.allow_diagnostic()) printf("Warning: BLX with length < 0\n");
 
 	int offset = 0;
 	if(addr1 + length > addr2) 
@@ -263,7 +266,7 @@ void agdp::blo(machine& m) {
 	int addr2 = tryte::word_to_int(m.memref(M_R2), m.memref(M_R2+1));
 	int length = tryte::word_to_int(m.memref(M_R3), m.memref(M_R3+1));
 
-	if(length < 0) printf("Warning: BLO with length < 0\n");
+	if(length < 0 && m.allow_diagnostic()) printf("Warning: BLO with length < 0\n");
 
 	int offset = 0;
 	if(addr1 + length > addr2) 
@@ -291,7 +294,7 @@ void agdp::bsh(machine& m) {
 	int addr2 = tryte::word_to_int(m.memref(M_R2), m.memref(M_R2+1));
 	int length = tryte::word_to_int(m.memref(M_R3), m.memref(M_R3+1));
 
-	if(length < 0) printf("Warning: BSH with length < 0\n");
+	if(length < 0 && m.allow_diagnostic()) printf("Warning: BSH with length < 0\n");
 
 	int offset = 0;
 	if(addr1 + length > addr2) 
@@ -320,7 +323,7 @@ void agdp::blp(machine& m) {
 	int addr2 = tryte::word_to_int(m.memref(M_R2), m.memref(M_R2+1));
 	int length = tryte::word_to_int(m.memref(M_R3), m.memref(M_R3+1));
 
-	if(length < 0) printf("Warning: BLP with length < 0\n");
+	if(length < 0 && m.allow_diagnostic()) printf("Warning: BLP with length < 0\n");
 
 	int offset = 0;
 	if(addr1 + length > addr2) 

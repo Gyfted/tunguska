@@ -45,6 +45,20 @@ def verify_inputs(folder, manifest):
         raise ValueError("Matching source archive is missing or changed; prepare a fresh release")
     if bundle_hashes(folder / "Tunguska.app") != manifest["bundle_hashes"]:
         raise ValueError("App bundle changed after preparation; prepare a fresh release")
+    if manifest.get("status") == "notarized":
+        name = manifest.get("binary_archive", "")
+        archive = folder / name
+        if (not name or archive.parent != folder or archive.is_symlink() or not archive.is_file()
+                or sha256(archive) != manifest.get("binary_sha256")):
+            raise ValueError("Final binary archive is missing or changed; prepare a fresh release")
+        sums = folder / "SHA256SUMS"
+        if not sums.is_file() or sums.read_text() != distribution_checksums(manifest):
+            raise ValueError("Distribution SHA256SUMS is missing or changed; prepare a fresh release")
+
+
+def distribution_checksums(manifest):
+    return (manifest["binary_sha256"] + "  " + manifest["binary_archive"] + "\n" +
+            manifest["source_sha256"] + "  " + manifest["source_archive"] + "\n")
 
 
 def prepare(args):
@@ -72,7 +86,7 @@ def prepare(args):
     architecture = "universal2" if args.archs == ["arm64", "x86_64"] else args.archs[0]
     print("Building and testing exact source commit " + commit, flush=True)
     with (folder / "build-and-tests.log").open("w") as log:
-        subprocess.run(["make", "-j4", "ARCHS=" + " ".join(args.archs), "all", "test", "sanitize", "security-check", "compiler-check", "compiler-sanitize", "vision-check", "vision-sanitize", "explorer-check", "explorer-sanitize", "weight-check", "weight-sanitize", "weight-gpu-validation", "rendering-check", "verify-app", "release-check"],
+        subprocess.run(["make", "-j4", "ARCHS=" + " ".join(args.archs), "all", "test", "sanitize", "security-check", "assembler-check", "assembler-sanitize", "image-fuzz-check", "compiler-check", "compiler-sanitize", "vision-check", "vision-sanitize", "explorer-check", "explorer-sanitize", "weight-check", "weight-sanitize", "weight-gpu-validation", "rendering-check", "verify-app", "release-check"],
                        cwd=source, check=True, stdout=log, stderr=subprocess.STDOUT)
         # Run on the build host. Cross-built slices are verified below, not claimed runtime-tested.
         subprocess.run(["make", "ARCHS=" + " ".join(args.archs), "sandbox-check"], cwd=source,
@@ -143,7 +157,7 @@ def notarize(args):
     if manifest["status"] == "notarized":
         verify(app, notarized=True)
         write_distribution_notes(folder, manifest)
-        print("Already notarized; matching app/source verified.")
+        print("Already notarized; matching app, source, final ZIP and checksums verified.")
         return
     if not manifest.get("notarization_id"):
         entitlements = folder / "release.entitlements"
@@ -183,9 +197,9 @@ def notarize(args):
     binary = folder / ("Tunguska-" + manifest["version"] + "-" + architecture + ".zip")
     subprocess.run(["ditto", "-c", "-k", "--keepParent", str(app), str(binary)], check=True)
     manifest.update(status="notarized", bundle_hashes=bundle_hashes(app), binary_archive=binary.name, binary_sha256=sha256(binary))
+    (folder / "SHA256SUMS").write_text(distribution_checksums(manifest))
     save_manifest(folder, manifest)
-    (folder / "SHA256SUMS").write_text(manifest["binary_sha256"] + "  " + binary.name + "\n" +
-                                       manifest["source_sha256"] + "  " + manifest["source_archive"] + "\n")
+    verify_inputs(folder, manifest)
     write_distribution_notes(folder, manifest)
     print("Notarized and Gatekeeper-accepted. Publish the binary, matching source archive, and SHA256SUMS together.")
 

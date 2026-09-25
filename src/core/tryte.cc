@@ -17,6 +17,9 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+/* Mac fork security hardening — 2026-09-25. Checked host arithmetic, bounded
+ * image input and guest diagnostics; original authorship and license retained. */
+
 /* Mac fork modification notice — 2026-09-24
  * Maintained by Vinny Lingham (https://github.com/Gyfted).
  * C++17 compatibility and const-correct nonary string conversion.
@@ -33,6 +36,13 @@
 #include <unistd.h>
 #include <termios.h>
 #include <string.h>
+#include <cstdint>
+#include <stdexcept>
+
+// Security hardening, 2026-09-25: normalize before narrowing or indexing.
+static int wrapped_tryte(int64_t value) {
+	return int(((value + 364) % 729 + 729) % 729 - 364);
+}
 
 tryte::tryte() : changed(false), cache(0) { } 
 
@@ -58,17 +68,15 @@ tryte::tryte(trit* trits) {
 
 /* From balanced base9 */
 tryte::tryte(const char* s) {
-	int len = strlen(s);
+	if (!s || strlen(s) != 3) throw std::invalid_argument("Expected three balanced nonary digits");
 	const char* translation = "DCBA01234";
-	if(len != 3) printf("Malformed balanced nonary numeral length\n");
 	int power = 81; int num; int val = 0;
 	for(num = 0; num < 3; num++) {
 		const char* idx = strchr(translation, s[num]);
 		if(idx == NULL) {
-		       	printf("Error in balanced nonary numeral conversion\n");
-			break;
+			throw std::invalid_argument("Invalid balanced nonary digit");
 		} else {
-			val += power * (unsigned int)(idx - translation - 4);
+			val += power * int(idx - translation - 4);
 			power /= 9;
 		}
 	}
@@ -93,11 +101,11 @@ tryte::tryte(int i) {
 	}
 
 	if(i > 364) {
-		i = (i + 364)%729-364;
 		carry = trit::TRTRUE;
+		i = wrapped_tryte(i);
 	} else if(i < -364) {
-		i = -((-i + 364)%729)+364;
 		carry = trit::TRFALSE;
+		i = wrapped_tryte(i);
 	} else {
 		carry = trit::TRMU;
 
@@ -216,12 +224,16 @@ tryte& tryte :: operator=(const int v) {
 	return *this;
 }
 tryte tryte :: operator<<(int s) const {
+	if (s < 0) throw std::out_of_range("Negative tryte shift");
 	tryte t;
+	if (s >= 6) return t;
 	for(int i = 0; i < 6-s; i++) { t[i] = (*this)[i+s]; }
 	return t;
 }
 tryte tryte :: operator>>(int s) const {
+	if (s < 0) throw std::out_of_range("Negative tryte shift");
 	tryte t;
+	if (s >= 6) return t;
 	for(int i = 0; i < 6-s; i++) { 
 		t[i+s] = trits[i]; 
 	}
@@ -237,13 +249,16 @@ tryte& tryte::operator+=(const tryte& a) {
 	return *this;
 }
 tryte& tryte::operator+=(const int v) {
-	*this = tryte(to_int() + v);
+	*this = *this + v;
 	changed = true;
 	return *this;
 }
 
 tryte tryte::operator+(const int v) const {
-	return to_int() + v;
+	const int64_t sum = int64_t(to_int()) + v;
+	tryte result(wrapped_tryte(sum));
+	result.carry = sum > 364 ? trit::TRTRUE : sum < -364 ? trit::TRFALSE : trit::TRMU;
+	return result;
 }
 
 /* Low tryte in multiplication */

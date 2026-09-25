@@ -54,13 +54,13 @@ uint64_t Runtime::run(uint64_t instructions, double maxMilliseconds) {
     for (; count < instructions && running(); ++count) {
         if (!cycle()) break;
         // Service display handshakes even when running without a window.
-        if ((count & 1023) == 1023) {
-            capture();
-            if (maxMilliseconds > 0 &&
-                std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() >= maxMilliseconds) {
-                ++count;
-                break;
-            }
+        if ((count & 1023) == 1023) capture();
+        // Check after every instruction/peripheral operation. A block operation
+        // can be far more expensive than an ordinary CPU instruction.
+        if (maxMilliseconds > 0 &&
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() >= maxMilliseconds) {
+            ++count;
+            break;
         }
     }
     capture();
@@ -97,7 +97,7 @@ void Runtime::key(char ascii) {
 }
 void Runtime::breakKey() { cpu_->queue_interrupt(new keybreak_interrupt()); }
 void Runtime::mouse(int dx, int dy) {
-    while (dx || dy) {
+    while ((dx || dy) && cpu_->pending_interrupts() < machine::max_interrupts) {
         const int x = std::clamp(dx, -13, 13), y = std::clamp(dy, -13, 13);
         cpu_->queue_interrupt(new mousemotion_interrupt(x, y));
         dx -= x; dy -= y;

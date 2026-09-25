@@ -9,6 +9,8 @@
 #import "Interface.h"
 #include "runtime.h"
 #include <deque>
+#include <algorithm>
+#include <cmath>
 
 static NSColor *RGB(unsigned rgb) {
     return [NSColor colorWithSRGBRed:((rgb >> 16) & 255)/255.0 green:((rgb >> 8) & 255)/255.0 blue:(rgb & 255)/255.0 alpha:1];
@@ -42,8 +44,13 @@ static NSColor *RGB(unsigned rgb) {
 - (void)mouseUp:(NSEvent *)event { if (_runtime) _runtime->mouseButton(false); }
 - (void)mouseDragged:(NSEvent *)event { [self mouseMoved:event]; }
 - (void)mouseMoved:(NSEvent *)event {
-    if (_runtime && _runtime->frame().mode != 0)
-        _runtime->mouse((int)event.deltaX, (int)event.deltaY);
+    if (_runtime && _runtime->frame().mode != 0) {
+        const auto delta = [](double value) {
+            constexpr double limit = machine::max_interrupts * 13;
+            return std::isfinite(value) ? int(std::clamp(value, -limit, limit)) : 0;
+        };
+        _runtime->mouse(delta(event.deltaX), delta(event.deltaY));
+    }
 }
 - (void)updateTrackingAreas {
     [super updateTrackingAreas];

@@ -17,6 +17,9 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+/* Mac fork security fixes — 2026-09-25: checked numeric parsing and bounded
+ * emission; original authorship and GPL-2.0-or-later terms retained. */
+
 
 #ifndef assembler_h
 #define assembler_h
@@ -25,6 +28,9 @@
 #include <map>
 #include <stack>
 #include <string>
+#include <fstream>
+#include <memory>
+#include <cstdint>
 using namespace std;
 
 typedef enum {
@@ -53,11 +59,11 @@ class source {
 		int lineno() const { return line; }
 		void inc_line() { line ++; }
 
-		ifstream* get_fs() { return filestream; }
+		ifstream* get_fs() { return filestream.get(); }
 		const string& get_filename() { return filename; }
 	private:
 		string filename;
-		ifstream* filestream;
+		std::shared_ptr<ifstream> filestream;
 		int line;
 };
 
@@ -76,13 +82,14 @@ class assembler {
 		void dt(int v);
 		void dtstring(const char* s);
 		void dw(int v);
+		void reserve(int count, int value = 0);
 		int label_eval(const char* c);
 		void addop(char* c, op_mode mode, int val);
 		void inc/*lude*/(const char* s);
 
 		/* Program counter */
 		int get_pc() const { return pc; }
-		void set_pc(int p) { this->pc = p; }
+		void set_pc(int p) { org(p); emitted = 0; }
 
 		void save(const char* outfile) { m.save(outfile); }
 		void verbose_info();
@@ -110,6 +117,7 @@ class assembler {
 
 		machine m;			/* The machine */
 		int pc;				/* Program counter */
+		size_t emitted = 0;
 		state_t state;			/* Assembler sweep (INITIAL or FINAL) */
 
 		static yyFlexLexer* l_instance;
@@ -124,5 +132,8 @@ int nonsextet(char* s);
 int floatval(char* s);
 int lowtryte(int v);
 int hightryte(int v);
+int checked_assembly_integer(int64_t value);
+int assembly_decimal(const char* text);
+int assembly_quotient(int numerator, int denominator);
 
 #endif

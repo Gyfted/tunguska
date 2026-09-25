@@ -17,6 +17,9 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+/* Mac fork security hardening — 2026-09-25. Checked host arithmetic, bounded
+ * image input and guest diagnostics; original authorship and license retained. */
+
 /* Mac fork modification notice — 2026-09-24
  * Maintained by Vinny Lingham (https://github.com/Gyfted).
  * Make host file access and saving explicit; release mounted resources.
@@ -83,7 +86,7 @@ void disk::heartbeat() {
 		case DISKOP_UNLOAD: unload(); break;
 		case DISKOP_LOAD: do_load(); break;
 
-		default: printf("Unknown disk operation %d\n", d.to_int());
+		default: if (m->allow_diagnostic()) printf("Unknown disk operation %d\n", d.to_int());
 	}
 
 	d = DISKOP_NOOP;

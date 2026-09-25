@@ -27,14 +27,14 @@ GitHub change. Future work should compare those sources explicitly.
 
 Vinny Lingham maintains this independent fork. The original project remains
 attributed to Viktor Lofgren; no transfer of ownership, appointment by the author,
-or endorsement is claimed. Modified original files carry 2026-09-24 notices.
+or endorsement is claimed. Modified original files carry dated September 24–25, 2026 notices.
 Unmodified originals retain their existing notices and bytes.
 
 ## Architecture
 
 The original machine and its program/image formats remain central. The processor is independent of AppKit. `Runtime` owns the CPU, disk, and auxiliary processor and implements the former SDL main-loop behavior. Its frame snapshots cover 54×27 text, vectors, and 324×243 raster graphics in both color modes.
 
-The UI and machine run on one thread. A 60 Hz timer requests bounded execution batches, with a 7 ms time budget checked every 1,024 instructions. Display handshakes are serviced within batches. This removes the original concurrent unsynchronized display access and keeps UI input responsive. The timer is instruction-budgeted, not cycle-accurate or synchronized to a historical physical CPU.
+The UI and machine run on one thread. A 60 Hz timer requests bounded execution batches, with a cooperative 7 ms time budget checked after every instruction/peripheral cycle. A single block operation or final display capture can overshoot that budget. Display handshakes are serviced within batches. This removes the original concurrent unsynchronized display access and keeps UI input responsive. The timer is instruction-budgeted, not cycle-accurate or synchronized to a historical physical CPU.
 
 The text renderer uses scalable native monospace fonts. It maps the original display codes, approximating the old bitmap block glyphs with Unicode. Raster and vector output retain the original ternary color mapping. The mouse keeps relative-motion semantics. These are modern renderers rather than a pixel-perfect recreation of the old SDL window.
 
@@ -120,3 +120,18 @@ Original CPU, compiler and archive provenance is unchanged. New code is GPL-2.0-
 UCI digit data and learned numerical assets carry separate CC BY 4.0 attribution.
 The app builds offline and gains no entitlements or external ML dependencies.
 See [VISION-LAB.md](VISION-LAB.md) for training provenance, validation and limits.
+
+## September 25, 2026 security follow-up (0.12.2)
+
+Image reads now require an opened regular file, at most 8 MiB encoded input, and
+one complete gzip member (or one exact raw image), with no trailing data. Host
+integer conversion, arithmetic and shifts reject or normalize extreme values
+before indexing. Guest diagnostics share a 64-event budget per machine lifetime;
+explicit host tracing remains available. Motion input stops when its queue fills.
+
+The assembler now checks integer/float parsing and expression arithmetic, rejects
+unknown tokens and excessive emission/reservations, bounds origins and source
+file size, and releases include streams. Float literals retain their complete
+text. Release checks verify the final ZIP and checksum manifest as well as the
+app and matching source. See [the security review](SECURITY-REVIEW.md) for evidence,
+compatibility restrictions, reproduction commands and remaining limits.

@@ -17,6 +17,9 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+/* Mac fork security hardening — 2026-09-25. Checked host arithmetic, bounded
+ * image input and guest diagnostics; original authorship and license retained. */
+
 /* Mac fork modification notice — 2026-09-24
  * Maintained by Vinny Lingham (https://github.com/Gyfted).
  * Use modern exceptions, a memory-size constant, and noncopyable ownership.
@@ -27,6 +30,8 @@
 
 #include "tryte.h"
 #include <stdexcept>
+#include <cstddef>
+#include <cstdint>
 
 #ifndef memory_h
 #define memory_h
@@ -48,6 +53,9 @@ class memory {
 
 		/* Memory image management */
 		void load(const char* filename);
+		// Bounded, transactional decoder shared by file loading and fuzz tests.
+		static constexpr size_t max_image_bytes = 8 * 1024 * 1024;
+		void load_bytes(const uint8_t* data, size_t size);
 		void save(const char* filename);
 	protected:
 		/* Virtual memory */

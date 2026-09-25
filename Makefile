@@ -66,8 +66,18 @@ build/parser.h: build/parser.cc
 build/scanner.cc: src/assembler/scanner.ll build/parser.h
 	flex -o $@ $<
 
-build/tg_assembler: src/assembler/assembler.cc build/parser.cc build/scanner.cc $(OBJECTS)
+build/tg_assembler: src/assembler/assembler.cc src/assembler/assembler.h src/assembler/error.h build/parser.cc build/scanner.cc $(OBJECTS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) src/assembler/assembler.cc build/parser.cc build/scanner.cc $(OBJECTS) $(LDLIBS) -o $@
+
+build/tg_assembler-sanitized: src/assembler/assembler.cc src/assembler/assembler.h src/assembler/error.h build/parser.cc build/scanner.cc $(wildcard src/core/*.cc src/core/*.h) Makefile
+	$(CXX) $(CPPFLAGS) -std=c++17 -g -O1 -fsanitize=address,undefined,float-cast-overflow -fno-omit-frame-pointer src/assembler/assembler.cc build/parser.cc build/scanner.cc $(addprefix src/core/,$(addsuffix .cc,$(CORE))) $(LDLIBS) -o $@
+
+.PHONY: assembler-check assembler-sanitize
+assembler-check: build/tg_assembler
+	python3 tests/assembler_tests.py
+
+assembler-sanitize: build/tg_assembler-sanitized
+	python3 tests/assembler_tests.py --sanitized
 
 build/boot.ternobj: build/tg_assembler $(wildcard resources/memory_image_asm/*.asm)
 	cd resources/memory_image_asm && ../../build/tg_assembler -o ../../build/boot.ternobj ram.asm
@@ -144,9 +154,16 @@ sanitize: build/core-tests-sanitized build/boot.ternobj
 build/security-tests: tests/security_tests.cc src/runtime.cc src/runtime.h $(wildcard src/core/*.cc src/core/*.h) Makefile | build
 	$(CXX) $(CPPFLAGS) -Isrc -std=c++17 -mmacosx-version-min=12.0 -g -O1 -fsanitize=address,undefined,float-cast-overflow -fno-omit-frame-pointer tests/security_tests.cc src/runtime.cc $(addprefix src/core/,$(addsuffix .cc,$(CORE))) $(LDLIBS) -o $@
 
-security-check: build/security-tests
+security-check: build/security-tests build/boot.ternobj
 	UBSAN_OPTIONS=halt_on_error=1 build/security-tests > build/security-tests.log 2>&1 || { tail -50 build/security-tests.log; exit 1; }
 	@tail -1 build/security-tests.log
+
+build/image-fuzz: tests/image_fuzz.cc $(wildcard src/core/*.cc src/core/*.h) Makefile | build
+	$(CXX) $(CPPFLAGS) -Isrc -std=c++17 -g -O1 -fsanitize=address,undefined,float-cast-overflow -fno-omit-frame-pointer tests/image_fuzz.cc $(addprefix src/core/,$(addsuffix .cc,$(CORE))) $(LDLIBS) -o $@
+
+.PHONY: image-fuzz-check
+image-fuzz-check: build/image-fuzz build/boot.ternobj
+	UBSAN_OPTIONS=halt_on_error=1 build/image-fuzz build/boot.ternobj
 
 run: app
 	open build/Tunguska.app

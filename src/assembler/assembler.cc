@@ -17,6 +17,9 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+/* Mac fork security fixes — 2026-09-25: checked numeric parsing and bounded
+ * emission; original authorship and GPL-2.0-or-later terms retained. */
+
 /* Mac fork modification notice — 2026-09-24
  * Maintained by Vinny Lingham (https://github.com/Gyfted).
  * C++17/macOS compatibility and explicit output error handling.
@@ -32,6 +35,10 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <cerrno>
+#include <climits>
+#include <cmath>
+#include <filesystem>
 #include <FlexLexer.h>
 #include "machine.h"
 #include "agdp.h"
@@ -41,6 +48,30 @@
 using namespace std;
 
 extern int yyparse();
+
+int checked_assembly_integer(int64_t value) {
+    if (value < INT_MIN || value > INT_MAX)
+        throw new error(WHERE, "Integer expression exceeds the host integer range");
+    return int(value);
+}
+
+int assembly_decimal(const char* text) {
+    errno = 0;
+    char* end = nullptr;
+    const auto value = strtoll(text, &end, 10);
+    if (errno || end == text || *end)
+        throw new error(WHERE, "Invalid decimal integer");
+    return checked_assembly_integer(value);
+}
+
+int assembly_quotient(int numerator, int denominator) {
+    if (!denominator) {
+        // A forward label is unresolved during the first pass.
+        if (assembler::instance()->get_state() == INITIAL_SWEEP) return 0;
+        throw new error(WHERE, "Division by zero");
+    }
+    return checked_assembly_integer(int64_t(numerator) / denominator);
+}
 
 /* C style global assembler helper functions
  * 
@@ -77,8 +108,10 @@ int nonsextet(char* s) {
 
 int floatval(char* s) {
 	tryte high, low;
-	float f;
-	if(!sscanf(s, "%ff", &f)) {
+	errno = 0;
+	char* end = nullptr;
+	float f = strtof(s, &end);
+	if(errno || end == s || *end != 'f' || end[1] || !std::isfinite(f)) {
 		throw new error(WHERE, "Bad floating point value");
 		return 0;
 	}
@@ -107,7 +140,11 @@ bool islocal(const string& s) {
 
 source::source(const char* filename) {
 	this->filename = filename;
-	this->filestream = new ifstream(filename);
+	std::error_code ec;
+	if (!std::filesystem::is_regular_file(filename, ec) || ec ||
+	    std::filesystem::file_size(filename, ec) > 4 * 1024 * 1024 || ec)
+		throw new error(WHERE, "Source must be a regular file no larger than 4 MiB");
+	this->filestream = std::make_shared<ifstream>(filename);
 	this->line = 1;
 }
 
@@ -127,12 +164,17 @@ source::source(const source& s) {
 
 /* Set origin */
 void assembler::org(int p) { 
+	if (p < -MEMSIZ/2 || p > MEMSIZ/2)
+		throw new error(WHERE, "Origin is outside guest memory");
 	pc = p; 
 }
 
 /* Define tryte */
 void assembler::dt(int v) { 
-	m.memref(pc++) = v; 
+	if (emitted >= MEMSIZ) throw new error(WHERE, "Output exceeds guest memory");
+	++emitted;
+	m.memref(pc) = v;
+	pc = pc == MEMSIZ/2 ? -MEMSIZ/2 : pc + 1;
 }
 
 /* Define string of trytes */
@@ -145,8 +187,15 @@ void assembler::dtstring(const char* s) {
 
 /* Define word */
 void assembler::dw(int v) { 
-	tryte::int_to_word(v, m.memref(pc), m.memref(pc+1)); 
-	pc += 2;
+	tryte high, low;
+	tryte::int_to_word(v, high, low);
+	dt(high.to_int()); dt(low.to_int());
+}
+
+void assembler::reserve(int count, int value) {
+    if (count < 0 || size_t(count) > MEMSIZ - emitted)
+        throw new error(WHERE, "Reservation exceeds remaining guest memory");
+    for (int n = 0; n < count; ++n) dt(value);
 }
 
 int assembler::lineno() {
@@ -273,32 +322,31 @@ void assembler::addop(char* c, op_mode mode, int val) {
 	/* Add opcode to memory */
 	switch(mode) {
 		case OP_IMPLICIT: 
-			m.memref(pc++) = m.qop(machine::IMPLICIT, opc); break;
+			dt(m.qop(machine::IMPLICIT, opc).to_int()); break;
 		case OP_ACC: 
-			m.memref(pc++) = m.qop(machine::ACC, opc); break;
+			dt(m.qop(machine::ACC, opc).to_int()); break;
 		case OP_XY: 
-			m.memref(pc++) = m.qop(machine::XY, opc); break;
+			dt(m.qop(machine::XY, opc).to_int()); break;
 		case OP_IMMEDIATE: 
-			m.memref(pc++) = m.qop(machine::IMMEDIATE, opc); break;
+			dt(m.qop(machine::IMMEDIATE, opc).to_int()); break;
 		case OP_ABSOLUTE: 
-			m.memref(pc++) = m.qop(machine::ABS, opc); break;
+			dt(m.qop(machine::ABS, opc).to_int()); break;
 		case OP_ABSOLUTE_X: 
-			m.memref(pc++) = m.qop(machine::AX, opc); break;
+			dt(m.qop(machine::AX, opc).to_int()); break;
 		case OP_ABSOLUTE_Y: 
-			m.memref(pc++) = m.qop(machine::AY, opc); break;
+			dt(m.qop(machine::AY, opc).to_int()); break;
 		case OP_INDIRECT: 
-			m.memref(pc++) = m.qop(machine::INDIRECT, opc); break;
+			dt(m.qop(machine::INDIRECT, opc).to_int()); break;
 		case OP_INDIRECT_X: 
-			m.memref(pc++) = m.qop(machine::INDX, opc); break;
+			dt(m.qop(machine::INDX, opc).to_int()); break;
 		case OP_INDIRECT_Y: 
-			m.memref(pc++) = m.qop(machine::INDY, opc); break;
+			dt(m.qop(machine::INDY, opc).to_int()); break;
 	}
 
 	/* Add operation argument(s) */
-	if(mode == OP_IMMEDIATE) { m.memref(pc++) = val; }
+	if(mode == OP_IMMEDIATE) { dt(val); }
 	else if(mode > OP_IMMEDIATE) { 
-		tryte::int_to_word(val, m.memref(pc), m.memref(pc+1)); 
-		pc += 2;
+		dw(val);
 	}
 }
 
@@ -429,7 +477,7 @@ void assembler::read_files(int argc, int findex, char** argv) {
 
 
 /* Used by the parser */
-void yylex() { assembler::lexer()->yylex(); }
+int yylex() { return assembler::lexer()->yylex(); }
 
 void help(char* argv0) {
 	printf("\nUsage: %s [-h] [-v] [-o outfile] file [file2 ... filen]\n"
@@ -449,7 +497,7 @@ int main(int argc, char* argv[]) {
 	while((optret = getopt(argc, argv, "o:hv")) != -1) {
 		switch(optret) {
 			case 'h': help(argv[0]); exit(EXIT_SUCCESS);
-			case 'o': outfile = strdup(optarg); break;
+			case 'o': outfile = optarg; break;
 			case 'v': verbose = true; break;
 			case '?':
 			case ':': help(argv[0]); exit(EXIT_FAILURE);

@@ -1,4 +1,101 @@
-# Targeted security review — September 24, 2026
+# Security review — September 25, 2026 (0.12.2)
+
+A targeted local code review of baseline `a17d9330ff81375d6db24b5584e8fd06d62419ae`
+covered the emulator, image loading/saving, native UI and labs, assembler, 3CC
+compiler/driver, and release verification. This is maintainer-led review, not an
+independent audit or a guarantee against vulnerabilities. Confirmed problems
+were fixed in 0.12.2; the historical reviews below retain their original scope.
+
+## Findings and fixes
+
+| Finding | Impact and evidence | Fix |
+| --- | --- | --- |
+| Assembler arithmetic and host integer conversion (medium) | `@DT 1/0`, `@DT 2147483647+1` and `@DT 2147483647` triggered sanitizer failures: division by zero and signed overflow, including normalization before the tryte lookup. No code-execution exploit was established. | Checked decimal/expression arithmetic, widened host conversion/addition/address arithmetic, validated nonary strings and shifts. Tests include INT_MIN/INT_MAX and previous-output preservation. |
+| Unbounded image input and blocking file types (medium) | The old loader blocked opening a FIFO until the reproduction timed out. Bounding decompressed output did not bound compressed input/header scanning. | Open nonblocking, validate the opened descriptor as a regular file, cap encoded input at 8 MiB even if it grows, bound decompression, and reject extra gzip members/trailing bytes. Validation completes before memory changes. |
+| Guest batch budget checked too infrequently (medium) | A guest loop requesting large block operations executed 1,024 instructions in 408.967 ms against a requested 1 ms budget. | Check elapsed time after each instruction/peripheral cycle. The same optimized probe yielded after 3 instructions in 1.600 ms on this host. This remains cooperative: a single operation and final display capture can overshoot. |
+| Unbounded guest diagnostics and excess motion processing (low) | Guest DEBUG and invalid peripheral operations could repeatedly print; huge host motion deltas kept allocating/discarding interrupts after the queue filled. | Share a 64-event diagnostic budget per machine lifetime; retain explicit host tracing separately. Stop motion processing at the 4,096-event capacity; clamp finite native event deltas before conversion. |
+| Final distribution ZIP skipped on re-verification (medium, local release integrity) | An already-notarized candidate checked app/source but never checked its final ZIP or SHA256SUMS. A replacement ZIP could therefore evade that check. | Require the final archive name/path/hash and exact distribution checksum file. Tampered/missing ZIP and checksum regressions pass. The local manifest remains trusted; this does not authenticate a maliciously rewritten manifest. |
+| Assembler silent input corruption/resource exposure (low) | `@DT 1!` succeeded with an ignored character; `1.5f` was lexed starting two characters late. Very large reservations/emission and origins lacked bounds. | Reject unknown tokens and invalid floats, retain full float text, bound source file size, origins and total emission/reservations, wrap the guest PC safely, release include streams, and correct the lexer return signature. |
+
+The assembler and 3CC are separate command-line developer tools, not native app
+components. Source includes are intentional host-file access and remain trusted
+inputs. Their size checks are not a filesystem sandbox or a hard process-wide
+resource limit. The assembler now limits each regular source file to 4 MiB,
+include depth to the existing 100-file bound, and total emitted trytes per pass
+to one guest address space. Repeated overlapping emissions also consume that
+budget. This can reject formerly accepted oversized assembly.
+
+Valid raw little-endian images and single-member gzip images remain supported,
+including both original guest OS builds. Concatenated gzip members and trailing
+junk are now intentionally rejected. These are format restrictions, not a claim
+that every historically accepted file is still accepted.
+
+## Verification and reproduction
+
+```sh
+make test sanitize security-check
+make assembler-check assembler-sanitize image-fuzz-check
+make compiler-check compiler-sanitize
+make vision-check vision-sanitize explorer-check explorer-sanitize
+make weight-check weight-sanitize weight-gpu-validation rendering-check
+make sandbox-check verify-app release-check
+```
+
+The native ARM64 checks passed on Apple M5 Max. They include exhaustive tryte and
+word tests, 2,125,764 ADD/CMP cases, 23,328 randomized opcode/state cases, original
+boot/HELP and demos, 19 malformed assembler inputs, compiler execution/rejection
+fixtures, 1,797 Vision guest/reference comparisons, 622 Explorer plan comparisons,
+GPU reference and Metal validation, and 288 offscreen drawing cases. Smaller
+sanitized Vision/Explorer suites run separately. Existing atomic-save,
+sandbox-denial and user-selected-file checks remain part of release gates.
+
+`image-fuzz-check` is **bounded, seeded mutation testing**, not coverage-guided
+fuzzing. Its 4,096 mutations cover compressed bytes, raw payloads, truncations,
+trailing bytes and recompressed payloads with valid CRCs. This run accepted 142
+valid mutations and rejected 3,954, with no ASan/UBSan/float-cast-overflow failure.
+The stock toolchain lacks the libFuzzer runtime; sustained coverage-guided
+fuzzing is still future work. Fixed regressions additionally cover FIFO input,
+compressed expansion, corrupt CRCs, invalid final trytes, oversized input,
+concatenated gzip members, extreme arithmetic/shifts, diagnostic flooding and
+expensive guest operations.
+
+Clang static analysis covered 30 translation units. No diagnostics were reported
+for the app/core/runtime/lab sources. Re-analysis of all changed C++/Objective-C++
+translation units, including the assembler, also reported none. The legacy 3CC
+compiler still has 11 analyzer warnings: allocation/stream lifetime and possible
+null-object paths. These have not all been established as reachable source-input
+bugs or eliminated; they are not a clean compiler security sign-off. Parser/token
+and AST ownership modernization remains unfinished.
+
+Local evidence is in `build/security-review-20260925/`: baseline sanitizer logs,
+FIFO and budget reproductions, analyzer summaries, `full-checks.log` and
+`sandbox.log`. Every new clean release build reruns the regression gates,
+including assembler sanitizers and image mutations. Build artifacts/logs stay
+outside the source repository; tests and this report are included in source.
+
+## Remaining security boundaries
+
+- Guest execution and rendering still share the UI process. Limits are cooperative;
+  there is no hard per-operation CPU/memory limit or separate guest worker sandbox.
+- The compiler and assembler are trusted-source developer tools. Includes can read
+  host files, and historical parser/AST allocations can persist until process exit.
+  3CC's public driver has CPU/wall/output limits but no hard memory cap.
+- Randomized tests, static analysis and Apple notarization do not establish memory
+  safety, full ISA/compiler correctness, or protection against every malformed input.
+- System zlib, AppKit, Metal and macOS are supplied by Apple. This review did not
+  audit their internals or query a current CVE database. Intel slices and older
+  supported macOS versions still need runtime testing on those systems.
+- Filesystem coordination and atomic rename do not exclude uncooperative local
+  processes or guarantee directory-metadata durability after power loss. Regular
+  files on slow/network filesystems can still stall synchronous reads.
+
+App Sandbox, hardened runtime and the two minimal file-access entitlements remain
+required. Developer ID signing/notarization was completed for 0.12.1; status for
+any newer candidate is recorded in its release manifest after verification.
+
+---
+
+# Historical targeted security review — September 24, 2026
 
 This is a focused local review of the native Mac preview, not a certification or an independent audit. The relevant attacker-controlled inputs are memory/floppy images, guest instructions and peripheral commands, and pasted keyboard input. The CLI assembler and 3CC compiler are separate developer tools and are not loaded into the app.
 

@@ -14,6 +14,37 @@ import verify_app
 
 
 class ReleaseGates(unittest.TestCase):
+    def test_final_zip_and_checksums_must_match(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            (folder / "Tunguska.app").mkdir()
+            source, binary = folder / "source.tar.gz", folder / "binary.zip"
+            source.write_bytes(b"source")
+            binary.write_bytes(b"final ZIP")
+            manifest = dict(status="notarized", source_archive=source.name,
+                            source_sha256=release.sha256(source), bundle_hashes={},
+                            binary_archive=binary.name, binary_sha256=release.sha256(binary))
+            sums = folder / "SHA256SUMS"
+            sums.write_text(release.distribution_checksums(manifest))
+            release.verify_inputs(folder, manifest)
+            binary.write_bytes(b"tampered ZIP")
+            with self.assertRaisesRegex(ValueError, "binary archive"):
+                release.verify_inputs(folder, manifest)
+            binary.write_bytes(b"final ZIP")
+            sums.write_text("tampered checksums")
+            with self.assertRaisesRegex(ValueError, "SHA256SUMS"):
+                release.verify_inputs(folder, manifest)
+            sums.unlink()
+            with self.assertRaisesRegex(ValueError, "SHA256SUMS"):
+                release.verify_inputs(folder, manifest)
+            sums.write_text(release.distribution_checksums(manifest))
+            binary.unlink()
+            with self.assertRaisesRegex(ValueError, "binary archive"):
+                release.verify_inputs(folder, manifest)
+            manifest["binary_archive"] = "../binary.zip"
+            with self.assertRaisesRegex(ValueError, "binary archive"):
+                release.verify_inputs(folder, manifest)
+
     def test_source_and_bundle_must_match(self):
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)

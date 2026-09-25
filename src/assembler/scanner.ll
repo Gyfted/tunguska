@@ -17,6 +17,9 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+/* Mac fork security fixes — 2026-09-25: checked numeric parsing and bounded
+ * emission; original authorship and GPL-2.0-or-later terms retained. */
+
 /* Mac fork modification notice — 2026-09-24
  * Maintained by Vinny Lingham (https://github.com/Gyfted).
  * Use the macOS system strndup implementation.
@@ -29,6 +32,8 @@
 %option c++
 %{
 #include "parser.h"
+#include "assembler.h"
+#include "error.h"
 
 /* Non-GNU compatibility */
 #if !defined(__linux__) && !defined(__APPLE__)
@@ -51,8 +56,8 @@ extern YYSTYPE yylval;
 \;.+$				//
 \%[0-4A-D]{3}			yylval.sval = strdup(yytext); return NONTRIP;
 \%[0-4A-D]{6}			yylval.sval = strdup(yytext); return NONSEXT;
-[0-9]+				yylval.ival = atoi((char*)yytext); return DECIMAL;
-\-?[0-9.]+f			yylval.sval = strdup(yytext+2); return FLOATVAL;
+[0-9]+				yylval.ival = assembly_decimal(yytext); return DECIMAL;
+\-?[0-9.]+f			yylval.sval = strdup(yytext); return FLOATVAL;
 LOW				return LOW;
 HIGH				return HIGH;
 \'[^\']*\'			yylval.sval = strndup(yytext+1, strlen(yytext)-2); return STRING;
@@ -70,9 +75,9 @@ HIGH				return HIGH;
 \$\$				return HERE;
 \(				return '(';
 \)				return ')';
-[A-z\.][A-z\_\.0-9]*		yylval.sval = strdup((char*)yytext); return IDENTIFIER;
+[A-Za-z_\.][A-Za-z_\.0-9]*		yylval.sval = strdup((char*)yytext); return IDENTIFIER;
 \n				return NEWLINE;
-[ \t]+				//
+[ \t\r]+				//
 \:				return ':';
 \;[^\n]*			return COMMENT;
 \,				return ',';
@@ -82,4 +87,5 @@ HIGH				return HIGH;
 \-				return '-';
 \{				return '{';
 \}				return '}';
+.				throw new error(WHERE, "Unrecognized input character");
 %%

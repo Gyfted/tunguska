@@ -17,6 +17,9 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+/* Mac fork security hardening — 2026-09-25. Checked host arithmetic, bounded
+ * image input and guest diagnostics; original authorship and license retained. */
+
 /* Mac fork modification notice — 2026-09-24
  * Maintained by Vinny Lingham (https://github.com/Gyfted).
  * Separate the core from SDL; bound and validate interrupt requests.
@@ -100,10 +103,11 @@ class machine : public memory {
 
 
 		/* Add an interrupt to the queue */
+		static constexpr std::size_t max_interrupts = 4096;
 		void queue_interrupt(interrupt* i) {
 			if (!i) return;
 			const bool clock = dynamic_cast<clock_interrupt*>(i) != nullptr;
-			if ((clock && clock_pending) || interrupt_queue->size() >= 4096) { delete i; return; }
+			if ((clock && clock_pending) || interrupt_queue->size() >= max_interrupts) { delete i; return; }
 			if (clock) clock_pending = true;
 			interrupt_queue->push(i);
 		}
@@ -153,6 +157,10 @@ class machine : public memory {
 
 		void set_state(state* s) { delete current_state; current_state = s; }
 		const state* get_state() const { return current_state; }
+
+		// Guest-triggered diagnostics share a fixed budget until host reset.
+		// Explicit host-enabled instruction tracing is independent of this limit.
+		bool allow_diagnostic() { if (diagnostics >= 64) return false; ++diagnostics; return true; }
 
 
 	protected:
@@ -266,6 +274,7 @@ class machine : public memory {
 		std::queue<interrupt*>* interrupt_queue;
 		bool clock_pending = false;
 		bool instruction_pending = false;
+		unsigned diagnostics = 0;
 
 		state* current_state;
 };
