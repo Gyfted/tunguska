@@ -57,7 +57,7 @@ class ReleaseGates(unittest.TestCase):
                 resources = app / "Contents" / "Resources"
                 resources.mkdir(parents=True)
                 for name in ("LICENSE", "AUTHORS", "NOTICE.md", "boot.ternobj", "boot-3cc.ternobj",
-                             "VISION-NOTICE.md", "vision.ternobj", "vision-digits.bin", "vision-model.json", "vision-weights.bin", "vision-int8-weights.bin", "explorer.ternobj"):
+                             "VISION-NOTICE.md", "vision.ternobj", "vision-digits.bin", "vision-model.json", "vision-weights.bin", "vision-int8-weights.bin", "explorer.ternobj", "matvec.metal"):
                     (resources / name).write_bytes(b"fixture")
                 with patch.object(verify_app, "run", side_effect=tool):
                     return verify_app.verify(app, developer_id)

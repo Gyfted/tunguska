@@ -4,6 +4,7 @@
 #import "DebuggerWindow.h"
 #import "VisionLab.h"
 #import "ExplorerLab.h"
+#import "WeightLab.h"
 #import "FileAccess.h"
 #include "runtime.h"
 #include <deque>
@@ -146,6 +147,7 @@ static NSButton *Button(NSString *title, id target, SEL action) {
 @property(strong) DebuggerWindow *debugger;
 @property(strong) VisionLab *visionLab;
 @property(strong) ExplorerLab *explorerLab;
+@property(strong) WeightLab *weightLab;
 @property(strong) ScreenView *screen;
 @property(strong) NSButton *runButton;
 @property(strong) NSTextField *registers;
@@ -194,7 +196,7 @@ static NSButton *Button(NSString *title, id target, SEL action) {
     NSStackView *sidebar = [NSStackView stackViewWithViews:@[]];
     sidebar.orientation = NSUserInterfaceLayoutOrientationVertical;
     sidebar.alignment = NSLayoutAttributeLeading;
-    sidebar.spacing = 11;
+    sidebar.spacing = 8;
     [sidebar addArrangedSubview:Label(@"A computer in base three.", 14, RGB(0xA1B6A9))];
     [sidebar addArrangedSubview:Label(@"MACHINE", 10, RGB(0x789686), YES)];
     self.status = Label(@"●  Running", 14, RGB(0x8CDBAE));
@@ -214,6 +216,7 @@ static NSButton *Button(NSString *title, id target, SEL action) {
     }
     [sidebar addArrangedSubview:Button(@"Ternary Vision Lab", self, @selector(showVisionLab:))];
     [sidebar addArrangedSubview:Button(@"Ternary Explorer", self, @selector(showExplorer:))];
+    [sidebar addArrangedSubview:Button(@"Weight Race", self, @selector(showWeightRace:))];
     [sidebar addArrangedSubview:Label(@"IMAGE", 10, RGB(0x789686), YES)];
     self.imageLabel = Label(@"Original Tunguska OS", 12, RGB(0xA1B6A9));
     self.imageLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
@@ -288,6 +291,7 @@ static NSButton *Button(NSString *title, id target, SEL action) {
     [machine.submenu addItemWithTitle:@"Send Break" action:@selector(sendBreak:) keyEquivalent:@""];
     [machine.submenu addItemWithTitle:@"Ternary Vision Lab" action:@selector(showVisionLab:) keyEquivalent:@"l"];
     [machine.submenu addItemWithTitle:@"Ternary Explorer" action:@selector(showExplorer:) keyEquivalent:@"e"];
+    [machine.submenu addItemWithTitle:@"Weight Race" action:@selector(showWeightRace:) keyEquivalent:@"g"];
     NSApp.mainMenu = bar;
 }
 - (void)loadImage:(NSURL *)url {
@@ -349,6 +353,12 @@ static NSButton *Button(NSString *title, id target, SEL action) {
     if (_runtime) _runtime->setRunning(false);
     if (!self.visionLab) self.visionLab = [[VisionLab alloc] init];
     [self.visionLab showWindow:sender];
+    [self updateStats];
+}
+- (void)showWeightRace:(id)sender {
+    if (_runtime) _runtime->setRunning(false);
+    if (!self.weightLab) self.weightLab = [[WeightLab alloc] init];
+    [self.weightLab showWindow:sender];
     [self updateStats];
 }
 - (void)showExplorer:(id)sender {

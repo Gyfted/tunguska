@@ -93,8 +93,8 @@ build/debugger.o: src/debugger.cc src/debugger.h Makefile | build
 build/tunguska-cli: src/cli.cc build/runtime.o $(OBJECTS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc $^ $(LDLIBS) -o $@
 
-build/Tunguska: src/macos/ExplorerLab.mm src/macos/ExplorerLab.h build/explorer.o src/macos/main.mm src/macos/VisionLab.mm src/macos/VisionLab.h build/vision.o src/macos/DebuggerWindow.mm src/macos/DebuggerWindow.h src/macos/FileAccess.mm src/macos/FileAccess.h build/runtime.o build/debugger.o $(OBJECTS)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $(filter-out %.h,$^) $(LDLIBS) -framework Cocoa -o $@
+build/Tunguska: src/macos/WeightLab.mm src/macos/WeightLab.h src/macos/WeightBenchmark.mm src/weight_benchmark.h build/weight_benchmark.o src/macos/ExplorerLab.mm src/macos/ExplorerLab.h build/explorer.o src/macos/main.mm src/macos/VisionLab.mm src/macos/VisionLab.h build/vision.o src/macos/DebuggerWindow.mm src/macos/DebuggerWindow.h src/macos/FileAccess.mm src/macos/FileAccess.h build/runtime.o build/debugger.o $(OBJECTS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $(filter-out %.h,$^) $(LDLIBS) -framework Cocoa -framework Metal -framework MetalPerformanceShaders -o $@
 
 app: build/Tunguska build/boot.ternobj build/boot-3cc.ternobj build/vision.ternobj build/explorer.ternobj
 	mkdir -p build/Tunguska.app/Contents/MacOS build/Tunguska.app/Contents/Resources
@@ -102,6 +102,7 @@ app: build/Tunguska build/boot.ternobj build/boot-3cc.ternobj build/vision.terno
 	mv -f build/Tunguska.app/Contents/MacOS/Tunguska.new build/Tunguska.app/Contents/MacOS/Tunguska
 	cp build/boot.ternobj build/boot-3cc.ternobj build/vision.ternobj build/explorer.ternobj resources/vision/vision-digits.bin resources/vision/vision-model.json resources/vision/vision-weights.bin resources/vision/vision-int8-weights.bin resources/vision/VISION-NOTICE.md LICENSE AUTHORS NOTICE.md build/Tunguska.app/Contents/Resources/
 	cp src/macos/Info.plist build/Tunguska.app/Contents/Info.plist
+	cp resources/benchmark/matvec.metal build/Tunguska.app/Contents/Resources/
 	codesign --force --sign - --options runtime --entitlements src/macos/Tunguska.entitlements build/Tunguska.app
 
 verify-app: app
@@ -181,3 +182,24 @@ build/explorer-tests-sanitized: tests/explorer_tests.cc src/explorer.cc src/expl
 explorer-sanitize: build/explorer-tests-sanitized build/explorer.ternobj
 	UBSAN_OPTIONS=halt_on_error=1 build/explorer-tests-sanitized build/explorer.ternobj --quick > build/explorer-sanitized.log 2>&1 || { tail -30 build/explorer-sanitized.log; exit 1; }
 	@tail -1 build/explorer-sanitized.log
+
+.PHONY: weight-check weight-sanitize
+build/weight_benchmark.o: src/weight_benchmark.cc src/weight_benchmark.h Makefile | build
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -MMD -MP -c $< -o $@
+
+build/weight-benchmark-tests: tests/weight_benchmark_tests.mm src/macos/WeightBenchmark.mm src/weight_benchmark.h build/weight_benchmark.o Makefile
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $(filter %.mm %.o,$^) -framework Foundation -framework Metal -framework MetalPerformanceShaders -o $@
+
+weight-check: build/weight-benchmark-tests
+	python3 tests/weight_report_tests.py
+	build/weight-benchmark-tests resources/benchmark/matvec.metal
+
+build/weight-benchmark-tests-sanitized: tests/weight_benchmark_tests.mm src/macos/WeightBenchmark.mm src/weight_benchmark.cc src/weight_benchmark.h Makefile | build
+	$(CXX) $(CPPFLAGS) -Isrc -std=c++17 -g -O1 -fobjc-arc -fsanitize=address,undefined -fno-omit-frame-pointer $(filter %.mm %.cc,$^) -framework Foundation -framework Metal -framework MetalPerformanceShaders -o $@
+
+weight-sanitize: build/weight-benchmark-tests-sanitized
+	UBSAN_OPTIONS=halt_on_error=1 build/weight-benchmark-tests-sanitized resources/benchmark/matvec.metal
+
+.PHONY: weight-gpu-validation
+weight-gpu-validation: build/weight-benchmark-tests
+	MTL_DEBUG_LAYER=1 MTL_SHADER_VALIDATION=1 build/weight-benchmark-tests resources/benchmark/matvec.metal

@@ -28,6 +28,7 @@ Click the display and type `HELP`, then Return. Commands are uppercase. The side
 | Debugger, ⌘D | Pause and open disassembly, breakpoints, registers and memory |
 | Ternary Vision Lab, ⌘L | Draw digits, run ternary neural inference, inspect neurons and benchmark |
 | Ternary Explorer, ⌘E | Edit a maze and watch a ternary guest navigate with incomplete knowledge |
+| Weight Race, ⌘G | Compare packed ternary and FP16 weights using the native Mac GPU |
 | Reset, ⌘R | Reload the selected memory image |
 | Open Image, ⌘O | Boot a complete `.ternobj` memory image |
 | ⌘B | Return to the bundled original operating system |
@@ -85,6 +86,20 @@ not evidence of faster ternary hardware or a physical robot controller.
 See [the Explorer guide](docs/EXPLORER.md) for controls, planning rules, memory
 addresses, validation and limits.
 
+## Weight Race
+
+Open **Weight Race** (⌘G) and press **Compare all sizes**. It runs the same
+matrix-vector calculation with FP16 weights, packed two-bit ternary weights,
+and Apple's MPS matrix library as an additional FP16 baseline. Every output is
+checked against an independent exact reference. Weight-memory bars, GPU timings,
+sample ranges and JSON exports separate the guaranteed 8× smaller weight buffers
+from any measured speed benefit. Small layers may see no benefit.
+
+This is native Metal execution on binary hardware, separate from the guest CPU.
+It tests a synthetic layer with already-ternary weights, not trained-model
+accuracy or energy efficiency. See [the benchmark guide](docs/WEIGHT-RACE.md)
+for measurement details, reproducibility and limitations.
+
 ## Build a program
 
 ```sh
@@ -121,6 +136,7 @@ make sandbox-check verify-app release-check
 make compiler-check compiler-sanitize
 make vision-check vision-sanitize
 make explorer-check explorer-sanitize
+make weight-check weight-sanitize weight-gpu-validation
 ```
 
 Tests cover every pair of tryte values for addition and multiplication, all 531,441 word conversions, 2,125,764 ADD/CMP instruction cases, memory boundaries, bounded interrupts, image roundtrips and rejection of malformed images, original OS boot and keyboard commands, pause/step/reset, and the original text/vector/raster demos. `sanitize` runs the same suite with AddressSanitizer and UndefinedBehaviorSanitizer.
@@ -162,6 +178,7 @@ Developer ID signing and Apple notarization require Apple Developer Program memb
 
 - `src/core/` — adapted original CPU, balanced ternary math, memory, interrupts, disk and coprocessor.
 - `src/runtime.*` — window-independent execution, input, and display snapshots.
+- `src/weight_benchmark.*`, `src/macos/WeightBenchmark.mm` and `resources/benchmark/` — native GPU weight-format comparison.
 - `src/explorer.*` and `resources/explorer/` — ternary robot simulation, reference planner and 3CC navigation guest.
 - `src/vision.*` and `resources/vision/` — offline ternary vision engine, trained assets and guest.
 - `src/debugger.*` — read-only disassembly, address validation and number formatting.

@@ -158,3 +158,38 @@ The return reserve is a heuristic and can fail under arbitrary world changes or
 lost routes. Guest execution remains in the UI process, and all existing emulator
 and compiler limitations above still apply. Developer ID signing and notarization
 remain deferred at the maintainer's request.
+
+## Weight Race 0.11 checks — September 25, 2026
+
+Weight Race adds a native Metal/MPS synthetic matrix-vector comparison. The app
+loads a fixed bundled shader and generated numerical data; it does not accept
+external models, shader files, downloads or network input. Shader compilation
+uses the system Metal API. Existing App Sandbox, hardened runtime and minimal
+file-panel entitlements remain unchanged. The exported report includes the
+shader's SHA-256 and bounded numerical measurements, with no telemetry.
+
+The engine bounds dimensions, rounds and buffer sizes before allocation, checks
+device memory limits, and rejects missing GPU support, pipeline/command failures,
+invalid timestamps and nonfinite or incorrect output. Every stored weight and
+all GPU outputs are verified. Independent integer reference calculations catch
+GPU bugs even if both custom kernels agree with each other. A negative test
+modifies both kernels to return an incorrect result and verifies rejection.
+
+Host ASan/UBSan and separate Metal API/shader-validation suites passed on Apple
+M5 Max. The cases cover one-cell and odd-sized matrices, padded FP16 rows, partial
+vectors/SIMD groups, exact FP16/packed/MPS agreement, bounded configuration,
+sample summaries, and cancellation during preparation and after warm-up.
+Targeted Clang analysis of the host helper, GPU runner and native lab reported
+no diagnostics. These checks do not instrument or audit Apple's driver code.
+
+Native UI verification covered a completed four-size sweep, 51-round selection,
+new weights, cancellation, and sandboxed JSON export. Exported raw samples,
+medians/percentiles, buffer lengths, shader hash and exact-check counts were
+independently verified. Performance results are documented in
+[the Weight Race guide](WEIGHT-RACE.md), separately from correctness checks.
+
+GPU work runs from a background worker with cooperative cancellation between
+bounded commands. An already submitted GPU command cannot be forcibly cancelled
+by the app. The app adds no hard process-wide CPU/memory limit, comprehensive GPU
+fuzzing, independent security audit or hardware power measurement. Existing
+emulator/compiler limitations remain; Apple signing/notarization stays deferred.
