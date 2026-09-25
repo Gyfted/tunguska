@@ -68,13 +68,13 @@ static NSColor *RGB(unsigned rgb) {
     if (!_runtime) return;
     const auto& frame = _runtime->frame();
     NSRect area = NSInsetRect(self.bounds, 24, 24);
+    if (NSIsEmptyRect(area)) return;
     if (frame.mode == 0) {
         const CGFloat cellWidth = MIN(area.size.width / tunguska::columns, area.size.height / (tunguska::rows * 1.7));
         const CGFloat cellHeight = cellWidth * 1.7;
         const CGFloat x0 = NSMidX(area) - cellWidth * tunguska::columns/2;
         const CGFloat y0 = NSMidY(area) - cellHeight * tunguska::rows/2;
-        NSFont *font = [NSFont monospacedSystemFontOfSize:cellWidth / 0.60 weight:NSFontWeightMedium];
-        NSDictionary *attributes = @{NSFontAttributeName:font, NSForegroundColorAttributeName:RGB(0xB4EAD0)};
+        NSDictionary *attributes = TGDrawingAttributes(cellWidth / 0.60, YES, NSFontWeightMedium, RGB(0xB4EAD0));
         NSArray *extra = @[@"▘", @"▌", @"▚", @"▛", @"▀", @"▐", @"▞", @"▟", @"▄", @"█"];
         for (int y = 0; y < tunguska::rows; ++y) for (int x = 0; x < tunguska::columns; ++x) {
             const int code = frame.text[y*tunguska::columns+x];

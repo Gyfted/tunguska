@@ -72,7 +72,7 @@ def prepare(args):
     architecture = "universal2" if args.archs == ["arm64", "x86_64"] else args.archs[0]
     print("Building and testing exact source commit " + commit, flush=True)
     with (folder / "build-and-tests.log").open("w") as log:
-        subprocess.run(["make", "-j4", "ARCHS=" + " ".join(args.archs), "all", "test", "sanitize", "security-check", "compiler-check", "compiler-sanitize", "vision-check", "vision-sanitize", "explorer-check", "explorer-sanitize", "weight-check", "weight-sanitize", "weight-gpu-validation", "verify-app", "release-check"],
+        subprocess.run(["make", "-j4", "ARCHS=" + " ".join(args.archs), "all", "test", "sanitize", "security-check", "compiler-check", "compiler-sanitize", "vision-check", "vision-sanitize", "explorer-check", "explorer-sanitize", "weight-check", "weight-sanitize", "weight-gpu-validation", "rendering-check", "verify-app", "release-check"],
                        cwd=source, check=True, stdout=log, stderr=subprocess.STDOUT)
         # Run on the build host. Cross-built slices are verified below, not claimed runtime-tested.
         subprocess.run(["make", "ARCHS=" + " ".join(args.archs), "sandbox-check"], cwd=source,

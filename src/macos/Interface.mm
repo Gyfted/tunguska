@@ -1,6 +1,23 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Independent Mac frontend, 2026-09-25. Original Tunguska: Viktor Lofgren.
 #import "Interface.h"
+#include <cmath>
+
+NSDictionary<NSAttributedStringKey, id> *TGDrawingAttributes(CGFloat size, BOOL mono,
+    NSFontWeight weight, NSColor *color, NSParagraphStyle *paragraph) {
+    if (!std::isfinite(size) || size <= 0) size = 13;
+    NSFont *font = mono ? [NSFont monospacedSystemFontOfSize:size weight:weight] : nil;
+    if (!font) font = [NSFont systemFontOfSize:size weight:weight];
+    if (!font) font = [NSFont systemFontOfSize:size];
+    NSMutableDictionary<NSAttributedStringKey, id> *attributes = [NSMutableDictionary dictionary];
+    // Omit an unavailable attribute so AppKit can use its default. Never catch
+    // drawing exceptions: that would conceal unrelated rendering defects.
+    if (font) attributes[NSFontAttributeName] = font;
+    NSColor *foreground = color ?: NSColor.labelColor;
+    if (foreground) attributes[NSForegroundColorAttributeName] = foreground;
+    if (paragraph) attributes[NSParagraphStyleAttributeName] = paragraph;
+    return attributes;
+}
 
 // Plot colors can be bright; small text needs stronger contrast in light mode.
 static NSColor *TGStatusColor(BOOL warning) {
@@ -129,10 +146,10 @@ NSView *TGSection(NSString *title, NSView *content) {
     }
     NSImage *icon = [self.image imageWithSymbolConfiguration:[NSImageSymbolConfiguration configurationWithPaletteColors:@[NSColor.labelColor]]];
     [icon drawInRect:NSMakeRect(12, 17, 22, 22) fromRect:NSZeroRect operation:NSCompositingOperationSourceOver fraction:1 respectFlipped:YES hints:nil];
-    [self.title drawInRect:NSMakeRect(46, 9, self.bounds.size.width-54, 20) withAttributes:@{
-        NSFontAttributeName:[NSFont systemFontOfSize:13 weight:NSFontWeightSemibold], NSForegroundColorAttributeName:NSColor.labelColor}];
-    [self.subtitle drawInRect:NSMakeRect(46, 30, self.bounds.size.width-54, 17) withAttributes:@{
-        NSFontAttributeName:[NSFont systemFontOfSize:11], NSForegroundColorAttributeName:NSColor.secondaryLabelColor}];
+    [self.title drawInRect:NSMakeRect(46, 9, self.bounds.size.width-54, 20)
+        withAttributes:TGDrawingAttributes(13, NO, NSFontWeightSemibold, NSColor.labelColor)];
+    [self.subtitle drawInRect:NSMakeRect(46, 30, self.bounds.size.width-54, 17)
+        withAttributes:TGDrawingAttributes(11, NO, NSFontWeightRegular, NSColor.secondaryLabelColor)];
 }
 @end
 NSButton *TGNavigation(NSString *title, NSString *subtitle, NSString *symbol, id target, SEL action) {

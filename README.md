@@ -141,6 +141,7 @@ make compiler-check compiler-sanitize
 make vision-check vision-sanitize
 make explorer-check explorer-sanitize
 make weight-check weight-sanitize weight-gpu-validation
+make rendering-check
 ```
 
 Tests cover every pair of tryte values for addition and multiplication, all 531,441 word conversions, 2,125,764 ADD/CMP instruction cases, memory boundaries, bounded interrupts, image roundtrips and rejection of malformed images, original OS boot and keyboard commands, pause/step/reset, and the original text/vector/raster demos. `sanitize` runs the same suite with AddressSanitizer and UndefinedBehaviorSanitizer.
@@ -161,6 +162,14 @@ reference, exercise closed-loop missions across priorities and sensor modes, and
 check unknown-cell exclusion, battery return, stale readings after wall edits,
 corrupt outputs, instruction limits, pause/step/breakpoints and cancellation.
 A bounded subset also runs under ASan/UBSan.
+
+AppKit rendering tests draw Explorer's real-world and knowledge maps offscreen
+in light and dark appearances, across all three worlds and multiple turns. They
+also simulate an unavailable monospaced font: the old drawing code raised an
+`NSInvalidArgumentException`, while the shared text attributes now use a fallback
+font and omit unavailable values. This guards the map-label dictionary failure
+reported in 0.12.0; the crash report did not identify the original missing value.
+The rendering test is required by release preparation.
 
 The Mac UI was also exercised directly: boot, typed `HELP`, pause, single step, reset, vector rendering, and mouse input in the 729-color drawing program.
 

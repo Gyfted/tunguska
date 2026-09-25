@@ -32,7 +32,7 @@ static NSStackView *Stack(NSArray<NSView*> *views,BOOL vertical=NO) { return TGS
 static NSButton *Button(NSString *title,id target,SEL action){return TGButton(title,nil,target,action);}
 static void Draw(NSString *s,NSRect rect,CGFloat size,NSColor *color) {
     NSMutableParagraphStyle *paragraph=[[NSMutableParagraphStyle alloc] init];paragraph.alignment=NSTextAlignmentCenter;
-    [s drawInRect:rect withAttributes:@{NSFontAttributeName:[NSFont monospacedSystemFontOfSize:size weight:NSFontWeightSemibold],NSForegroundColorAttributeName:color,NSParagraphStyleAttributeName:paragraph}];
+    [s drawInRect:rect withAttributes:TGDrawingAttributes(size,YES,NSFontWeightSemibold,color,paragraph)];
 }
 @interface ExplorerMap : NSView
 @property(assign) const ex::Simulation *simulation;

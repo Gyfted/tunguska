@@ -2,6 +2,9 @@
 // Shared presentation for the independent Mac frontend.
 #import <Cocoa/Cocoa.h>
 
+// Missing drawing resources must not become nil entries in a dictionary literal.
+NSDictionary<NSAttributedStringKey, id> *TGDrawingAttributes(CGFloat size, BOOL mono,
+    NSFontWeight weight, NSColor *color, NSParagraphStyle *paragraph = nil);
 NSTextField *TGText(NSString *text, CGFloat size = 13, BOOL mono = NO);
 NSTextField *TGHeading(NSString *text, CGFloat size = 13);
 NSColor *TGSuccessTextColor();

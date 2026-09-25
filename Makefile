@@ -111,6 +111,13 @@ verify-app: app
 release-check:
 	python3 tests/release_tests.py
 
+.PHONY: rendering-check
+build/rendering-tests: tests/macos_rendering_tests.mm src/macos/Interface.mm src/macos/Interface.h src/macos/ExplorerLab.mm src/macos/ExplorerLab.h src/macos/DebuggerWindow.mm src/macos/DebuggerWindow.h src/macos/FileAccess.mm src/macos/FileAccess.h build/explorer.o build/runtime.o build/debugger.o $(OBJECTS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $(filter-out %.h,$^) $(LDLIBS) -framework Cocoa -o $@
+
+rendering-check: build/rendering-tests
+	build/rendering-tests
+
 build/sandbox-tests: tests/macos_sandbox_tests.mm src/macos/FileAccess.mm src/macos/FileAccess.h build/runtime.o $(OBJECTS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $(filter-out %.h,$^) $(LDLIBS) -framework Cocoa -o $@
 

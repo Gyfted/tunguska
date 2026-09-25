@@ -19,7 +19,7 @@ static NSButton *Button(NSString *s, id target, SEL action) {
 }
 static NSStackView *Stack(NSArray<NSView *> *views, BOOL vertical = NO) { return TGStack(views,vertical,10); }
 static void DrawText(NSString *s, NSPoint point, CGFloat size, NSColor *color, BOOL mono = NO) {
-    [s drawAtPoint:point withAttributes:@{NSFontAttributeName:mono ? [NSFont monospacedSystemFontOfSize:size weight:NSFontWeightRegular] : [NSFont systemFontOfSize:size], NSForegroundColorAttributeName:color}];
+    [s drawAtPoint:point withAttributes:TGDrawingAttributes(size,mono,NSFontWeightRegular,color)];
 }
 
 @interface DigitCanvas : NSView {

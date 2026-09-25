@@ -11,7 +11,7 @@ static NSString *String(const std::string& s){return [NSString stringWithUTF8Str
 static NSTextField *Label(NSString *text,CGFloat size,BOOL mono=NO){return TGText(text,size,mono);}
 static NSStackView *Stack(NSArray<NSView*> *views,BOOL vertical=NO){return TGStack(views,vertical);}
 
-static void Draw(NSString *text,NSRect rect,CGFloat size,NSColor *color){[text drawInRect:rect withAttributes:@{NSFontAttributeName:[NSFont monospacedSystemFontOfSize:size weight:NSFontWeightRegular],NSForegroundColorAttributeName:color}];}
+static void Draw(NSString *text,NSRect rect,CGFloat size,NSColor *color){[text drawInRect:rect withAttributes:TGDrawingAttributes(size,YES,NSFontWeightRegular,color)];}
 @interface WeightBars : NSView
 @property(copy) NSArray<NSNumber*> *values;
 @property(copy) NSArray<NSString*> *names;
