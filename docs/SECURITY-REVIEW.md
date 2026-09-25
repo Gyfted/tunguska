@@ -319,3 +319,10 @@ dependencies. PDF parsing remains in-process; file/page/text limits do not bound
 internal parser allocations or time. The search addition has not had an external
 security audit, PDF fuzz campaign, or Intel/older-macOS runtime validation. See
 [SEARCH.md](SEARCH.md) for concrete limits and incomplete capabilities.
+
+Final search UI smoke testing exposed a weak `NSTableCellView.textField` lifetime
+error in the newly added result layout. Labels are now retained as subviews
+before assignment. The required AppKit regression checks label lifetimes after
+autorelease, row bounds and multiline PDF excerpts; it fails on the earlier
+implementation with the same nil-array exception and passes after the fix.
+The earlier local preview was rejected and never notarized or published.

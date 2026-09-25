@@ -7,7 +7,7 @@
 #include <chrono>
 
 @interface TGSearchResultCell : NSTableCellView
-@property NSTextField *excerpt;
+@property(strong) NSTextField *excerpt;
 @end
 @implementation TGSearchResultCell
 - (void)setBackgroundStyle:(NSBackgroundStyle)style {
@@ -130,10 +130,14 @@
     TGSearchResultCell *cell=[table makeViewWithIdentifier:@"result" owner:nil];
     if(!cell){
         cell=[[TGSearchResultCell alloc] init];cell.identifier=@"result";
-        cell.textField=[NSTextField labelWithString:@""];cell.excerpt=[NSTextField labelWithString:@""];
-        for(NSTextField *field in @[cell.textField,cell.excerpt]){
+        // NSTableCellView.textField is weak: retain labels as subviews before assigning it.
+        NSTextField *titleField=[NSTextField labelWithString:@""];
+        NSTextField *excerptField=[NSTextField labelWithString:@""];
+        [cell addSubview:titleField];[cell addSubview:excerptField];
+        cell.textField=titleField;cell.excerpt=excerptField;
+        for(NSTextField *field in @[titleField,excerptField]){
             field.translatesAutoresizingMaskIntoConstraints=NO;field.font=[NSFont systemFontOfSize:13];
-            field.maximumNumberOfLines=1;field.lineBreakMode=NSLineBreakByTruncatingTail;[cell addSubview:field];
+            field.maximumNumberOfLines=1;field.lineBreakMode=NSLineBreakByTruncatingTail;
             [field.leadingAnchor constraintEqualToAnchor:cell.leadingAnchor constant:4].active=YES;
             [field.trailingAnchor constraintEqualToAnchor:cell.trailingAnchor constant:-4].active=YES;
             [field.heightAnchor constraintEqualToConstant:18].active=YES;

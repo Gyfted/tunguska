@@ -3,6 +3,7 @@
 #import <Cocoa/Cocoa.h>
 #import <objc/runtime.h>
 #import "macos/Interface.h"
+#import "macos/SearchWindow.h"
 #include "explorer.h"
 #include <cmath>
 #include <iostream>
@@ -99,12 +100,35 @@ static unsigned RenderMaps() {
     return renders;
 }
 
+static void CheckSearchRows() {
+    SearchWindow *window=[[SearchWindow alloc] init];
+    [window setValue:@[@{@"title":@"Manual.pdf",@"path":@"/test/Manual.pdf",@"page":@19,
+        @"snippet":@"First line\nSecond line\r\nThird line\nA long PDF excerpt with enough text to wrap if the row does not truncate it correctly."}] forKey:@"hits"];
+    NSTableView *table=[window valueForKey:@"table"];
+    NSTableCellView *cell;__weak NSTextField *title;
+    @autoreleasepool {
+        cell=(NSTableCellView *)[window tableView:table viewForTableColumn:table.tableColumns[0] row:0];
+        title=cell.textField;
+    }
+    Check(title!=nil&&[title.stringValue isEqual:@"Manual.pdf · page 19"],"search title survives its autorelease pool");
+    Check(cell.subviews.count==2,"search row retains title and excerpt");
+    cell.frame=NSMakeRect(0,0,400,55);
+    [window.window.contentView addSubview:cell];
+    [window.window.contentView layoutSubtreeIfNeeded];
+    for(NSTextField *field in cell.subviews){
+        Check(NSContainsRect(cell.bounds,field.frame),"PDF labels fit inside their result row");
+        Check([field.stringValue rangeOfCharacterFromSet:NSCharacterSet.newlineCharacterSet].location==NSNotFound,"PDF line breaks do not overflow result rows");
+    }
+    [window close];
+}
+
 int main() {
     @autoreleasepool {
         @try {
             try {
                 [NSApplication sharedApplication];
                 CheckAttributes();
+                CheckSearchRows();
                 Check(RenderMaps() == 144, "normal maps render in both appearances");
                 {
                     ReplaceFontMethod unavailable(@selector(monospacedSystemFontOfSize:weight:), reinterpret_cast<IMP>(MissingFont));
@@ -120,7 +144,7 @@ int main() {
                 Check(missingFontCalls > 0, "font-failure path was exercised");
                 Check([NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightRegular] != nil,
                       "font implementation restored");
-                std::cout << "PASS AppKit: 288 map renders, light/dark, three worlds, routes; missing fonts/colors and invalid font sizes\n";
+                std::cout << "PASS AppKit: search row lifetimes and PDF layout; 288 map renders, light/dark, three worlds, routes; missing fonts/colors and invalid font sizes\n";
                 return 0;
             } catch (const std::exception& error) {
                 std::cerr << "FAIL: " << error.what() << '\n';

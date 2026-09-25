@@ -96,7 +96,9 @@ objective**. This release demonstrates faster conventional keyword search, not
 a ternary semantic performance win. A faster GUI or indexing-plus-query workflow
 has also not been established. Raw [keyword results](benchmarks/search-keywords-m5-max.json)
 and [meaning results](benchmarks/search-meaning-m5-max.json) include all samples,
-queries, platform and source fingerprints. Nothing here establishes performance
+queries, platform and source fingerprints. Measurements precede final UI-only
+and test-harness fixes; the measured search/scoring implementation is unchanged.
+Nothing here establishes performance
 on millions of documents or across millions of users' machines.
 
 ## Reproduce
