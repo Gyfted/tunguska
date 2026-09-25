@@ -1,7 +1,7 @@
 # Source and binary release procedure
 
-This fork currently publishes source only. The universal 0.12.1 candidate
-(source commit `78d79bc4e66714532afbdfe7a7356452cb20cb82`) was Developer ID signed,
+This fork currently publishes source only. The universal 0.12.2 security-fix candidate
+(source commit `763b4d5d1c7dfa1f3200df8828675ec4d95191bd`) was Developer ID signed,
 accepted by Apple notarization, stapled and accepted by Gatekeeper on 2026-09-25.
 Publication is a separate step. Do not claim upstream endorsement.
 

@@ -90,8 +90,15 @@ outside the source repository; tests and this report are included in source.
   files on slow/network filesystems can still stall synchronous reads.
 
 App Sandbox, hardened runtime and the two minimal file-access entitlements remain
-required. Developer ID signing/notarization was completed for 0.12.1; status for
-any newer candidate is recorded in its release manifest after verification.
+required. The universal 0.12.2 candidate from commit
+`763b4d5d1c7dfa1f3200df8828675ec4d95191bd` passed all clean-build release gates,
+Developer ID signing, Apple notarization, stapling and Gatekeeper assessment on
+September 25, 2026. The app extracted from the final ZIP passed the same security
+configuration/notarization checks; final ZIP/source hashes and SHA256SUMS were
+re-verified. Apple submission `4b63b948-e9c4-476b-9541-82639bec4ad8` was Accepted
+with no reported issues. Artifacts, complete matching source and logs are in
+`build/releases/0.12.2-763b4d5d1c7d/`. The ARM64 slice was executed; the Intel slice
+was built and inspected, not runtime-tested. No GitHub binary release was published.
 
 ---
 
