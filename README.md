@@ -24,6 +24,7 @@ Click the display and type `HELP`, then Return. Commands are uppercase. The side
 | Control | Action |
 | --- | --- |
 | Local Search, ⌘F | Search a selected folder of text, Markdown and PDFs offline |
+| Ternary Breach, ⌘5 | Play an original first-person game on the ternary CPU |
 | Computer, ⌘1 | Return to the original machine without resetting it |
 | Vision Lab / Explorer / Weight Race, ⌘2 / ⌘3 / ⌘4 | Switch experiments; the existing ⌘L / ⌘E / ⌘G shortcuts also work |
 | Run / Pause, ⌘P | Start or stop the processor |
@@ -45,6 +46,17 @@ Opening a lab pauses the original machine. Use the **Computer** button or ⌘1 t
 The guest’s `LOAD` command no longer opens host paths. Use **Mount Disk**, then `FDSTAT` or `RUN` in the guest. Guest disk writes stay in memory; use **Save Disk As** to persist them. The app uses macOS-coordinated replacement files for atomic saves without requesting access to the enclosing folder. Symbolic-link destinations are rejected. Disk images and memory images contain the same complete 531,441-tryte storage format, but are loaded into different devices.
 
 The app requests only App Sandbox and user-selected file read/write access. There are no network, camera, microphone, broad-folder, JIT or hardened-runtime-exception entitlements. Open and Save dialogs authorize individual files or the folder explicitly selected for Local Search; the current memory image's URL is retained so Reset can reopen it. No persistent file bookmarks are stored. The developer CLI, assembler and 3CC compiler are separate, unsandboxed tools and are not included in the distributed app.
+
+## Ternary Breach
+
+Choose **Ternary Breach** in the sidebar or press **⌘5**. Recover three reactor
+cells, evade or disable four sentinels, and find the exit. **W/S** move, **A/D**
+turn, **Q/E** strafe, **Space** fires, **M** shows the map and **R** restarts.
+The original one-level game is compiled with 3CC: ray casting, sprites, collision,
+combat and HUD drawing all run on the ternary guest. It uses the existing
+324 × 243 three-color display and original graphics peripheral. This is a small
+Doom-style experiment with new assets, not original Doom or a performance claim.
+See [the game guide](docs/BREACH.md) for controls, architecture and tests.
 
 ## Local Search
 

@@ -1,0 +1,277 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Ternary Breach: an original first-person game for Viktor Lofgren's Tunguska.
+// Independent Mac fork, maintained by Vinny Lingham, 2026-09-25.
+// All simulation, ray casting, sprites and HUD drawing execute on the guest.
+#include "../../src/breach_protocol.h"
+
+asm("SEI", "LAD breach_irq", "STX 265718", "STY 265719", "JSR main",
+    "breach_idle: JMP breach_idle",
+    "breach_irq: LDA -265720", "CMP #0", "JNE breach_irq_end",
+    "LDA 80024", "INC A", "CMP #27", "JLT breach_irq_space", "LDA #0",
+    "breach_irq_space: CMP 80023", "JEQ breach_irq_end", "PSH A",
+    "LDX 80024", "LDA -265719", "STA 84000,X", "PLL A", "STA 80024",
+    "breach_irq_end: RTI");
+
+#include "breach_assets.3h"
+#define BYTE(a) (*(char*)(a))
+#define WORD(a) (*(int*)(a))
+#define SCREEN ((char*)-264262)
+#define MAP ((char*)BR_MAP)
+#define PX WORD(BR_X)
+#define PY WORD(BR_Y)
+#define ANGLE WORD(BR_ANGLE)
+#define HEALTH BYTE(BR_HEALTH)
+#define AMMO BYTE(BR_AMMO)
+#define CELLS BYTE(BR_CELLS)
+#define KILLS BYTE(BR_KILLS)
+
+int rayDistance;
+int raySide;
+int rayCell;
+int directionX;
+int directionY;
+int order[9];
+int objectDepth[9];
+int objectX[9] = {202,445,688,850,364,202,607,121,850};
+int objectY[9] = {364,283,526,769,283,607,850,850,121};
+
+int absolute(int value) { if(value<0)return -value;return value; }
+int minimum(int a,int b) { if(a<b)return a;return b; }
+int maximum(int a,int b) { if(a>b)return a;return b; }
+
+// The original AGDP block-set operation clears existing guest video memory.
+void fill(int address,int length,char ink) {
+    WORD(-265715)=address;WORD(-265713)=ink;WORD(-265711)=length;BYTE(-265716)=11;
+}
+// Each tryte is six monochrome trits. No host drawing primitive is introduced.
+void column(int x,int top,int bottom,char ink) {
+    if((x<0)||(x>=54))return;
+    top=maximum(top,26);bottom=minimum(bottom,205);
+    if(bottom<=top)return;
+    WORD(80030)=-264262+top*54+x;BYTE(80032)=bottom-top;BYTE(80033)=ink;
+    asm("LDX 80030", "LDY 80031", "LDA 80033", "breach_column: STA X,Y",
+        "PSH #0", "PSH #54", "ADW X,Y", "DEC 80032", "JGT breach_column");
+}
+void label(char* text,int x,int y) {
+    int i=0;int row=0;int code=0;
+    while((text[i]!=0)&&(x+i<54)) {
+        code=text[i];if((code<0)||(code>=100))code=0;
+        for(row=0;row<7;row++)SCREEN[(y+row)*54+x+i]=font[code*7+row];
+        i++;
+    }
+}
+void number(int value,int x,int y) {
+    char text[3];text[0]='0'+value/10;text[1]='0'+value%10;text[2]=0;label(text,x,y);
+}
+int wall(int x,int y) {
+    if((x<0)||(y<0)||(x>=972)||(y>=972))return 1;
+    if(MAP[(y/81)*12+x/81]==1)return 1;
+    return 0;
+}
+// Integer DDA; distances are perpendicular camera distances in 1/81-cell units.
+void cast(int rx,int ry) {
+    int mx=PX/81;int my=PY/81;int sx=1;int sy=1;
+    int dx=20000;int dy=20000;int tx=20000;int ty=20000;int i=0;
+    if(rx<0)sx=-1;if(ry<0)sy=-1;
+    if(rx!=0) {
+        dx=6561/absolute(rx);
+        if(sx>0)tx=((mx+1)*81-PX)*81/absolute(rx);
+        else tx=(PX-mx*81)*81/absolute(rx);
+    }
+    if(ry!=0) {
+        dy=6561/absolute(ry);
+        if(sy>0)ty=((my+1)*81-PY)*81/absolute(ry);
+        else ty=(PY-my*81)*81/absolute(ry);
+    }
+    rayDistance=20000;raySide=0;rayCell=1;
+    for(i=0;i<24;i++) {
+        if(tx<ty){rayDistance=tx;tx+=dx;mx+=sx;raySide=0;}
+        else {rayDistance=ty;ty+=dy;my+=sy;raySide=1;}
+        if((mx<0)||(my<0)||(mx>=12)||(my>=12))return;
+        rayCell=my*12+mx;if(MAP[rayCell]==1)return;
+    }
+}
+int visible(int x,int y) {
+    int dx=x-PX;int dy=y-PY;int length=maximum(absolute(dx),absolute(dy));
+    if(length<10)return 1;
+    cast(dx*81/length,dy*81/length);
+    if(rayDistance>=length-8)return 1;
+    return 0;
+}
+void restart() {
+    int i=0;
+    for(i=0;i<144;i++)MAP[i]=level[i];
+    for(i=0;i<4;i++)BYTE(BR_ENEMIES+i)=1;
+    PX=121;PY=121;ANGLE=9;HEALTH=9;AMMO=16;CELLS=0;KILLS=0;
+    WORD(BR_TURN)=0;BYTE(BR_MAP_VISIBLE)=0;BYTE(BR_FLASH)=0;
+    BYTE(BR_MESSAGE)=0;BYTE(BR_STATUS)=1;
+}
+void move(int dx,int dy) {
+    int x=PX+dx;int y=PY+dy;
+    // A ten-unit radius keeps the player away from wall faces and corners.
+    if((wall(x-10,PY-10)==0)&&(wall(x+10,PY-10)==0)&&
+       (wall(x-10,PY+10)==0)&&(wall(x+10,PY+10)==0))PX=x;
+    if((wall(PX-10,y-10)==0)&&(wall(PX+10,y-10)==0)&&
+       (wall(PX-10,y+10)==0)&&(wall(PX+10,y+10)==0))PY=y;
+}
+void collect() {
+    int cell=(PY/81)*12+PX/81;int tile=MAP[cell];
+    if(tile==2){CELLS++;MAP[cell]=0;BYTE(BR_MESSAGE)=1;}
+    if(tile==3){HEALTH=9;AMMO=minimum(AMMO+12,99);MAP[cell]=0;BYTE(BR_MESSAGE)=2;}
+    if(tile==4){if(CELLS==3)BYTE(BR_STATUS)=BR_WON;else BYTE(BR_MESSAGE)=3;}
+}
+void shoot() {
+    int i=0;int target=-1;int best=20000;int dx=0;int dy=0;int depth=0;int side=0;
+    if(AMMO<=0){BYTE(BR_MESSAGE)=4;return;}
+    AMMO--;BYTE(BR_FLASH)=1;
+    for(i=0;i<4;i++){if(BYTE(BR_ENEMIES+i)==1){
+        dx=objectX[i]-PX;dy=objectY[i]-PY;
+        depth=(dx*directionX+dy*directionY)/81;
+        side=(dy*directionX-dx*directionY)/81;
+        if((depth>0)&&(depth<best)&&(absolute(side)<maximum(18,depth/9))) {
+            if(visible(objectX[i],objectY[i])==1){target=i;best=depth;}
+        }
+    }}
+    if(target>=0){BYTE(BR_ENEMIES+target)=0;KILLS++;BYTE(BR_MESSAGE)=5;}
+}
+void sentinels() {
+    int i=0;
+    // Action-paced combat: no damage while the player is idle or reading.
+    if(WORD(BR_TURN)%4!=0)return;
+    for(i=0;i<4;i++){if(BYTE(BR_ENEMIES+i)==1){
+        if(absolute(objectX[i]-PX)+absolute(objectY[i]-PY)<260){
+            if(visible(objectX[i],objectY[i])==1){HEALTH--;BYTE(BR_MESSAGE)=6;}
+        }
+    }}
+    if(HEALTH<=0){HEALTH=0;BYTE(BR_STATUS)=BR_DEAD;}
+}
+void action(char key) {
+    if((key>=50)&&(key<=75))key-=40;
+    if(key=='R'){restart();return;}
+    if((BYTE(BR_STATUS)==BR_DEAD)||(BYTE(BR_STATUS)==BR_WON))return;
+    if(key=='M'){BYTE(BR_MAP_VISIBLE)=1-BYTE(BR_MAP_VISIBLE);return;}
+    if((key!='W')&&(key!='S')&&(key!='A')&&(key!='D')&&(key!='Q')&&(key!='E')&&(key!=' '))return;
+    BYTE(BR_FLASH)=0;BYTE(BR_MESSAGE)=0;
+    directionX=cosine[ANGLE];directionY=cosine[(ANGLE+27)%36];
+    if(key=='W')move(directionX/3,directionY/3);
+    if(key=='S')move(-directionX/3,-directionY/3);
+    if(key=='Q')move(directionY/3,-directionX/3);
+    if(key=='E')move(-directionY/3,directionX/3);
+    if(key=='A')ANGLE=(ANGLE+35)%36;
+    if(key=='D')ANGLE=(ANGLE+1)%36;
+    if(key==' ')shoot();
+    WORD(BR_TURN)=(WORD(BR_TURN)+1)%10000;
+    collect();if(BYTE(BR_STATUS)!=BR_WON)sentinels();
+}
+int active(int id) {
+    if(id<4)return BYTE(BR_ENEMIES+id);
+    if(MAP[(objectY[id]/81)*12+objectX[id]/81]>0)return 1;
+    return 0;
+}
+void sprite(int id,int depth) {
+    int dx=0;int dy=0;int side=0;int center=0;int h=0;
+    int half=0;int top=0;int bottom=0;
+    int col=0;int edge=0;int shape=0;
+    dx=objectX[id]-PX;dy=objectY[id]-PY;
+    side=(dy*directionX-dx*directionY)/81;
+    center=27+side*40/depth;h=minimum(130,9720/depth);
+    half=maximum(1,h/14);top=108-h/2;bottom=108+h/2;
+    if(id>=4){h=maximum(6,h/2);half=maximum(1,h/12);top=108;bottom=108+h;}
+    for(col=center-half;col<=center+half;col++) {
+        if((col>=0)&&(col<54)){if(depth<WORD(BR_DEPTH+col*2)){
+            edge=absolute(col-center);shape=edge*h/(half+1)/4;
+            if(id<4){
+                column(col,top+shape,bottom-shape,364);
+                column(col,top+shape+3,bottom-shape-3,-364);
+                column(col,top+h/3,top+h/3+maximum(2,h/10),364);
+                if(edge<half/2+1)column(col,bottom-h/5,bottom,0);
+            }else {
+                column(col,top+shape,bottom-shape,364);
+                column(col,top+shape+3,bottom-shape-3,0);
+                if(id==7)column(col,top+h/3,top+2*h/3,364);
+                if(id==8)column(col,top+3,bottom-3,-364);
+            }
+        }}
+    }
+}
+void mapView() {
+    int x=0;int y=0;int r=0;int tile=0;int i=0;char ink=0;
+    for(y=0;y<12;y++){for(x=0;x<12;x++){
+        tile=MAP[y*12+x];ink=-364;
+        if(tile==1)ink=0;if(tile>=2)ink=364;
+        for(r=0;r<5;r++)SCREEN[(32+y*6+r)*54+2+x]=ink;
+    }}
+    SCREEN[(34+(PY/81)*6)*54+2+PX/81]=364;
+    for(i=0;i<4;i++){if(BYTE(BR_ENEMIES+i)==1)
+        SCREEN[(34+(objectY[i]/81)*6)*54+2+objectX[i]/81]=121;}
+}
+void render() {
+    int col=0;int rx=0;int ry=0;int h=0;int top=0;int bottom=0;char ink=0;
+    int i=0;int j=0;int temp=0;int dx=0;int dy=0;
+    int ending=BYTE(BR_STATUS);
+    BYTE(BR_STATUS)=1;
+    directionX=cosine[ANGLE];directionY=cosine[(ANGLE+27)%36];
+    fill(-264262,13122,-364);
+    fill(-264262+108*54,97*54,-273);
+    for(i=109;i<205;i+=2)fill(-264262+i*54,54,-91);
+    for(col=0;col<54;col++) {
+        rx=directionX-directionY*(col-27)*2/81;
+        ry=directionY+directionX*(col-27)*2/81;
+        cast(rx,ry);WORD(BR_DEPTH+col*2)=maximum(1,rayDistance);
+        h=minimum(176,14256/maximum(1,rayDistance));top=108-h/2;bottom=108+h/2;
+        ink=0;if(raySide==1)ink=273;
+        if(rayDistance>400)ink=-273;
+        column(col,top,bottom,ink);
+        column(col,top,top+2,364);column(col,bottom-2,bottom,-364);
+        // Original industrial panel seams, generated entirely in guest code.
+        if(col%6==0)column(col,top+3,bottom-2,-273);
+    }
+    for(i=0;i<9;i++) {
+        order[i]=i;dx=objectX[i]-PX;dy=objectY[i]-PY;
+        objectDepth[i]=(dx*directionX+dy*directionY)/81;
+    }
+    for(i=0;i<8;i++){for(j=i+1;j<9;j++){
+        if(objectDepth[order[j]]>objectDepth[order[i]]){temp=order[i];order[i]=order[j];order[j]=temp;}
+    }}
+    for(i=0;i<9;i++){j=order[i];if((active(j)==1)&&(objectDepth[j]>12))sprite(j,objectDepth[j]);}
+    // Six-trit crosshair and a small original pulse-tool silhouette.
+    column(26,105,111,364);column(28,105,111,364);column(27,101,115,364);
+    for(col=23;col<=31;col++)column(col,190+absolute(col-27),205,0);
+    for(col=26;col<=28;col++)column(col,171,201,364);
+    column(27,174,199,-364);
+    if(BYTE(BR_FLASH)==1){for(col=24;col<=30;col++)column(col,158+absolute(col-27)*3,171,364);}
+    if(BYTE(BR_MAP_VISIBLE)==1)mapView();
+    label("TERNARY BREACH",2,5);label("RECOVER 3 CELLS THEN REACH THE EXIT",2,16);
+    label("HEALTH",2,211);number(HEALTH,9,211);label("AMMO",15,211);number(AMMO,20,211);
+    label("CELLS",26,211);number(CELLS,32,211);label("DRONES",38,211);number(KILLS,45,211);
+    label("W S MOVE  A D TURN  Q E STRAFE  SPACE FIRE  M MAP",2,232);
+    if(BYTE(BR_MESSAGE)==0)label("FIND THE CELLS  AVOID OR DISABLE THE SENTINELS",2,222);
+    if(BYTE(BR_MESSAGE)==1)label("REACTOR CELL RECOVERED",2,222);
+    if(BYTE(BR_MESSAGE)==2)label("SUPPLIES COLLECTED  HEALTH RESTORED",2,222);
+    if(BYTE(BR_MESSAGE)==3)label("EXIT LOCKED  RECOVER ALL THREE CELLS",2,222);
+    if(BYTE(BR_MESSAGE)==4)label("NO AMMO  FIND THE SUPPLY CACHE",2,222);
+    if(BYTE(BR_MESSAGE)==5)label("SENTINEL DISABLED",2,222);
+    if(BYTE(BR_MESSAGE)==6)label("HIT  MOVE AWAY OR DISABLE THE SENTINEL",2,222);
+    if((ending==BR_WON)||(ending==BR_DEAD)) {
+        fill(-264262+86*54,35*54,-364);
+        if(ending==BR_WON)label("BREACH COMPLETE  YOU ESCAPED",13,93);
+        else label("SIGNAL LOST",21,93);
+        label("PRESS R TO RESTART",18,107);
+    }
+    WORD(BR_FRAME)=(WORD(BR_FRAME)+1)%10000;
+    BYTE(-265718)=7; // +1 redraw, -1 raster, +1 three-color framebuffer.
+    if((ending==BR_WON)||(ending==BR_DEAD))BYTE(BR_STATUS)=ending;
+    else BYTE(BR_STATUS)=BR_READY;
+}
+void main() {
+    char key=0;int count=0;char* queue=(char*)BR_INPUT_QUEUE;
+    BYTE(BR_INPUT_HEAD)=0;BYTE(BR_INPUT_TAIL)=0;WORD(BR_FRAME)=0;restart();asm("CLI");render();
+    while(1) {
+        if(BYTE(BR_INPUT_HEAD)!=BYTE(BR_INPUT_TAIL)) {
+            if(BYTE(BR_STATUS)==BR_READY)BYTE(BR_STATUS)=1;
+            asm("SEI");key=queue[BYTE(BR_INPUT_HEAD)];BYTE(BR_INPUT_HEAD)=(BYTE(BR_INPUT_HEAD)+1)%27;asm("CLI");
+            action(key);count++;
+            if((count>=4)||(BYTE(BR_INPUT_HEAD)==BYTE(BR_INPUT_TAIL))){render();count=0;}
+        }
+    }
+}

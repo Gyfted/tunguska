@@ -46,3 +46,11 @@ numerical model assets are separately licensed under CC BY 4.0. Converted test
 records, training changes and full attribution are documented in
 resources/vision/VISION-NOTICE.md, also bundled as VISION-NOTICE.md.
 These data terms do not replace the GPL terms of the software or imply endorsement.
+
+## Ternary Breach
+
+Ternary Breach is an original first-person game added to the independent Mac fork
+on 2026-09-25. Its source, map, simple bitmap font and sprite designs are distributed
+under GPL-2.0-or-later. It runs on Viktor Lofgren's Tunguska and is built with his
+3CC compiler. No Doom code, proprietary game data or third-party game assets are
+included. This is not an official Doom port or an endorsed Tunguska release.

@@ -49,6 +49,28 @@ GUEST_3CC := $(addprefix resources/memory_image_3cc/,$(addsuffix .c,string stdio
 build/boot-3cc.ternobj: $(GUEST_3CC) $(wildcard resources/memory_image_3cc/*.3h) build/3cc build/tg_assembler scripts/compile_3cc.py
 	python3 scripts/compile_3cc.py -O 0n400000 -o $@ $(GUEST_3CC)
 
+build/breach_assets.3h: scripts/build_breach_assets.py | build
+	python3 $< $@
+
+build/breach.ternobj: resources/breach/breach.3c src/breach_protocol.h build/breach_assets.3h build/3cc build/tg_assembler scripts/compile_3cc.py
+	python3 scripts/compile_3cc.py -I build $< -o $@
+
+build/breach-tests: tests/breach_tests.cc src/breach_protocol.h build/runtime.o $(OBJECTS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc $(filter-out %.h,$^) $(LDLIBS) -o $@
+
+build/breach-tests-sanitized: tests/breach_tests.cc src/breach_protocol.h src/runtime.cc src/runtime.h $(wildcard src/core/*.cc src/core/*.h)
+	$(CXX) $(CPPFLAGS) -Isrc -std=c++17 -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer tests/breach_tests.cc src/runtime.cc $(addprefix src/core/,$(addsuffix .cc,$(CORE))) $(LDLIBS) -o $@
+
+build/breach-sanitized.ternobj: resources/breach/breach.3c src/breach_protocol.h build/breach_assets.3h build/3cc-sanitized build/tg_assembler scripts/compile_3cc.py
+	python3 -c 'from scripts.compile_3cc import compile_sources; compile_sources(["resources/breach/breach.3c"], "$@", includes=["build"], backend="build/3cc-sanitized")'
+
+.PHONY: breach-check breach-sanitize
+breach-check: build/breach-tests build/breach.ternobj
+	build/breach-tests build/breach.ternobj build/breach-frame.rgba
+
+breach-sanitize: build/breach-tests-sanitized build/breach-sanitized.ternobj
+	UBSAN_OPTIONS=halt_on_error=1 build/breach-tests-sanitized build/breach-sanitized.ternobj
+
 guest-3cc: build/boot-3cc.ternobj
 
 build:
@@ -106,14 +128,14 @@ build/tunguska-cli: src/cli.cc build/runtime.o $(OBJECTS)
 SEARCH_SOURCES := src/search.cc src/macos/SearchService.mm
 SEARCH_FRAMEWORKS := -framework Cocoa -framework CoreGraphics -framework NaturalLanguage -framework PDFKit -framework Accelerate -lsqlite3
 
-build/Tunguska: src/macos/SearchWindow.mm src/macos/SearchWindow.h $(SEARCH_SOURCES) src/search.h src/macos/SearchService.h src/macos/Interface.mm src/macos/Interface.h src/macos/WeightLab.mm src/macos/WeightLab.h src/macos/WeightBenchmark.mm src/weight_benchmark.h build/weight_benchmark.o src/macos/ExplorerLab.mm src/macos/ExplorerLab.h build/explorer.o src/macos/main.mm src/macos/VisionLab.mm src/macos/VisionLab.h build/vision.o src/macos/DebuggerWindow.mm src/macos/DebuggerWindow.h src/macos/FileAccess.mm src/macos/FileAccess.h build/runtime.o build/debugger.o $(OBJECTS)
+build/Tunguska: src/macos/SearchWindow.mm src/macos/SearchWindow.h $(SEARCH_SOURCES) src/search.h src/macos/SearchService.h src/macos/Interface.mm src/macos/Interface.h src/macos/WeightLab.mm src/macos/WeightLab.h src/macos/WeightBenchmark.mm src/weight_benchmark.h build/weight_benchmark.o src/macos/ExplorerLab.mm src/macos/ExplorerLab.h build/explorer.o src/macos/main.mm src/breach_protocol.h src/macos/VisionLab.mm src/macos/VisionLab.h build/vision.o src/macos/DebuggerWindow.mm src/macos/DebuggerWindow.h src/macos/FileAccess.mm src/macos/FileAccess.h build/runtime.o build/debugger.o $(OBJECTS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -Isrc -fobjc-arc $(filter-out %.h,$^) $(LDLIBS) -framework Cocoa -framework Metal -framework MetalPerformanceShaders $(SEARCH_FRAMEWORKS) -o $@
 
-app: build/Tunguska build/boot.ternobj build/boot-3cc.ternobj build/vision.ternobj build/explorer.ternobj
+app: build/Tunguska build/boot.ternobj build/boot-3cc.ternobj build/vision.ternobj build/explorer.ternobj build/breach.ternobj
 	mkdir -p build/Tunguska.app/Contents/MacOS build/Tunguska.app/Contents/Resources
 	cp build/Tunguska build/Tunguska.app/Contents/MacOS/Tunguska.new
 	mv -f build/Tunguska.app/Contents/MacOS/Tunguska.new build/Tunguska.app/Contents/MacOS/Tunguska
-	cp build/boot.ternobj build/boot-3cc.ternobj build/vision.ternobj build/explorer.ternobj resources/vision/vision-digits.bin resources/vision/vision-model.json resources/vision/vision-weights.bin resources/vision/vision-int8-weights.bin resources/vision/VISION-NOTICE.md LICENSE AUTHORS NOTICE.md build/Tunguska.app/Contents/Resources/
+	cp build/boot.ternobj build/boot-3cc.ternobj build/vision.ternobj build/explorer.ternobj build/breach.ternobj resources/vision/vision-digits.bin resources/vision/vision-model.json resources/vision/vision-weights.bin resources/vision/vision-int8-weights.bin resources/vision/VISION-NOTICE.md LICENSE AUTHORS NOTICE.md build/Tunguska.app/Contents/Resources/
 	cp src/macos/Info.plist build/Tunguska.app/Contents/Info.plist
 	cp resources/benchmark/matvec.metal build/Tunguska.app/Contents/Resources/
 	codesign --force --sign - --options runtime --entitlements src/macos/Tunguska.entitlements build/Tunguska.app

@@ -9,6 +9,7 @@
 #import "FileAccess.h"
 #import "Interface.h"
 #include "runtime.h"
+#include "breach_protocol.h"
 #include <deque>
 #include <algorithm>
 #include <cmath>
@@ -155,6 +156,7 @@ static NSColor *RGB(unsigned rgb) {
 @property(strong) NSTextField *mode;
 @property(strong) NSTextField *imageLabel;
 @property(strong) NSTextField *diskLabel;
+@property(strong) NSTextField *inputHint;
 @property(strong) NSTimer *timer;
 @property(strong) NSURL *imageURL;
 @end
@@ -194,6 +196,9 @@ static NSColor *RGB(unsigned rgb) {
     [sidebar addArrangedSubview:TGNavigation(@"Explorer", @"Navigate an unknown world.", @"map", self, @selector(showExplorer:))];
     NSButton *weights = TGNavigation(@"Weight Race", @"Memory and GPU speed.", @"chart.bar.xaxis", self, @selector(showWeightRace:));
     [sidebar addArrangedSubview:weights]; [sidebar setCustomSpacing:20 afterView:weights];
+    NSButton *breach = TGNavigation(@"Ternary Breach", @"A first-person ternary game.", @"gamecontroller", self, @selector(playBreach:));
+    breach.toolTip = @"Starts a new game on the ternary CPU. Resets the current guest and ejects its disk (⌘5).";
+    [sidebar addArrangedSubview:breach]; [sidebar setCustomSpacing:20 afterView:breach];
     [sidebar addArrangedSubview:TGHeading(@"Original programs", 11)];
     for (NSArray *entry in @[@[@"Command reference", @"HELP"], @[@"Character map", @"CHARMAP"], @[@"Vector random walk", @"BROWN"], @[@"Draw in 729 colors", @"RASTERDEMO729"]]) {
         NSButton *button = TGButton(entry[0], @"play", self, @selector(example:));
@@ -227,6 +232,7 @@ static NSColor *RGB(unsigned rgb) {
     __weak AppDelegate *weakSelf = self;
     self.screen.input = ^(NSString *text) { [weakSelf enqueue:text]; };
     NSTextField *hint = TGText(@"Click the display to type · HELP lists commands · Esc sends Break · ⌘V pastes", 11);
+    self.inputHint = hint;
     hint.textColor = NSColor.secondaryLabelColor;
     self.imageLabel = TGText(@"Original Tunguska OS", 12);
     self.diskLabel = TGText(@"No disk mounted", 12);
@@ -303,6 +309,7 @@ static NSColor *RGB(unsigned rgb) {
     [machine.submenu addItemWithTitle:@"Reset Image" action:@selector(reset:) keyEquivalent:@"r"];
     [machine.submenu addItemWithTitle:@"Boot Original System" action:@selector(bootOriginal:) keyEquivalent:@"b"];
     [machine.submenu addItemWithTitle:@"Boot Experimental 3CC System" action:@selector(boot3CC:) keyEquivalent:@""];
+    [machine.submenu addItemWithTitle:@"Play Ternary Breach" action:@selector(playBreach:) keyEquivalent:@"5"];
     [machine.submenu addItemWithTitle:@"Send Break" action:@selector(sendBreak:) keyEquivalent:@""];
     [machine.submenu addItemWithTitle:@"Ternary Vision Lab" action:@selector(showVisionLab:) keyEquivalent:@"l"];
     [machine.submenu addItemWithTitle:@"Ternary Explorer" action:@selector(showExplorer:) keyEquivalent:@"e"];
@@ -372,6 +379,10 @@ static NSColor *RGB(unsigned rgb) {
         _lastStats = NSDate.timeIntervalSinceReferenceDate;
         self.imageLabel.stringValue = [url.lastPathComponent isEqual:@"boot.ternobj"] ? @"Original Tunguska OS" : url.lastPathComponent;
         if ([url.lastPathComponent isEqual:@"boot-3cc.ternobj"]) self.imageLabel.stringValue = @"Experimental 3CC System";
+        const BOOL breach = [url.lastPathComponent isEqual:@"breach.ternobj"];
+        if (breach) self.imageLabel.stringValue = @"Ternary Breach · original guest game";
+        self.inputHint.stringValue = breach ? @"W/S move · A/D turn · Q/E strafe · Space fire · M map · R restart · ⌘B return to OS" : @"Click the display to type · HELP lists commands · Esc sends Break · ⌘V pastes";
+        self.screen.accessibilityHelp = self.inputHint.stringValue;
         self.diskLabel.stringValue = @"No disk mounted";
         [self.window makeFirstResponder:self.screen];
         [self updateStats];
@@ -391,7 +402,10 @@ static NSColor *RGB(unsigned rgb) {
         _runtime->key(_input.front()); _input.pop_front();
         _nextInputCycle = _runtime->cycles() + 5000;
     }
-    _runtime->run(18000, 7);
+    // The guest game needs more instructions per picture; retain the same UI
+    // time limit and execute every instruction through the original interpreter.
+    const BOOL drawingGame = [self.imageURL.lastPathComponent isEqual:@"breach.ternobj"] && _runtime->cpu().memref(BR_STATUS).to_int() == 1;
+    _runtime->run(drawingGame ? 100000 : 18000, 7);
     if (_revision != _runtime->frame().revision) {
         _revision = _runtime->frame().revision;
         self.screen.needsDisplay = YES;
@@ -449,6 +463,7 @@ static NSColor *RGB(unsigned rgb) {
 - (void)reset:(id)sender { if (self.imageURL) [self loadImage:self.imageURL]; }
 - (void)bootOriginal:(id)sender { [self loadImage:[NSBundle.mainBundle URLForResource:@"boot" withExtension:@"ternobj"]]; }
 - (void)boot3CC:(id)sender { [self loadImage:[NSBundle.mainBundle URLForResource:@"boot-3cc" withExtension:@"ternobj"]]; }
+- (void)playBreach:(id)sender { [self showComputer:sender]; [self loadImage:[NSBundle.mainBundle URLForResource:@"breach" withExtension:@"ternobj"]]; }
 - (void)sendBreak:(id)sender { if (_runtime) _runtime->breakKey(); }
 - (void)example:(NSButton *)sender {
     [self bootOriginal:sender];
