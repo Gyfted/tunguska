@@ -333,3 +333,25 @@ copy their weak window reference and cancellation token into block-owned locals.
 An asynchronous regression deliberately lets indexing finish before draining
 the main queue; AddressSanitizer rejects the old callback and passes the fixed
 version. `rendering-sanitize` is now a required clean-release gate.
+
+## Ternary Breach addition (0.14.0)
+
+The bundled game adds guest code and static, original map/font/sprite data. It
+does not add a native game engine, downloaded content, new CPU instructions,
+network access or additional entitlements. Input uses a 27-slot guest ring with
+26 usable entries, dropping new events on overflow and processing at most four
+before rendering. The native frontend retains its seven-millisecond cooperative
+execution budget while allowing larger instruction batches during game rendering.
+
+The required Breach checks execute the actual compiled image, including rapid
+input, collision, occlusion, combat, death/restart, pickups and the exit condition.
+Instrumented 3CC compilation and ASan/UBSan runtime checks passed, as did the full
+clean universal release gates. Native UI checks covered gameplay and actual guest
+debugger stepping. The signed and notarized ZIP was extracted and independently
+verified; see [BREACH.md](BREACH.md) for its exact source and submission IDs.
+
+This does not add a process boundary around guest execution or a general
+execution limit for arbitrary memory images. The one-million-instruction frame
+limit belongs to the integration test, not an application-wide watchdog. Existing
+emulator, compiler and in-process PDF-parser limitations remain. This is focused
+testing, not an independent security audit; Intel runtime testing is outstanding.

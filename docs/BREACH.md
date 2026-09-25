@@ -94,6 +94,32 @@ claim that an autonomous player completed combat. Each tested frame must finish
 within one million guest instructions. The sanitizer target also compiles the
 game with the instrumented 3CC and executes it under ASan/UBSan.
 
+## Release verification — September 25, 2026
+
+Version **0.14.0 (build 12)** was built from
+`6dcc9f898677ea5d88adbe84ef13013217b98b67`. The clean universal build passed core,
+assembler, compiler, image-mutation, Vision, Explorer, Breach, GPU, search,
+AppKit, sanitizer, release-integrity and real App Sandbox gates. The game boot
+frame took 381,184 guest instructions; the largest frame in the integration suite
+took 451,840. These are instruction counts, not an end-to-end speed comparison.
+Native UI checks verified launching, movement, firing, map toggling and debugger
+single-stepping. Launching, movement and a successful shot were repeated in the
+final notarized app.
+
+Apple accepted notarization submission
+`0b31b1d3-18a5-4f02-956f-fb1ed911cb4a`. The final ZIP was extracted and checked
+for matching bundle hashes, timestamped Developer ID signing, exact minimal
+entitlements, hardened runtime, stapled notarization, Gatekeeper acceptance and
+both `arm64` and `x86_64` slices. Matching source, ZIP and distribution checksums
+were also verified. Runtime tests ran on ARM64; Intel and older macOS runtime
+validation remain outstanding.
+
+Local distribution files are under `build/releases/0.14.0-6dcc9f898677/`:
+`Tunguska-0.14.0-universal2.zip`,
+`Tunguska-0.14.0-source-6dcc9f898677.tar.gz`, and `SHA256SUMS`.
+Distribute all three together with the included notices. No public GitHub binary
+release was published by this work.
+
 ## Authorship and rights
 
 The game source, map, simple pixel font and sprite designs are new work in Vinny

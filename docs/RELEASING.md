@@ -1,7 +1,7 @@
 # Source and binary release procedure
 
-This fork currently publishes source only. The universal 0.12.2 security-fix candidate
-(source commit `763b4d5d1c7dfa1f3200df8828675ec4d95191bd`) was Developer ID signed,
+This fork currently publishes source only. The universal 0.14.0 Ternary Breach candidate
+(source commit `6dcc9f898677ea5d88adbe84ef13013217b98b67`) was Developer ID signed,
 accepted by Apple notarization, stapled and accepted by Gatekeeper on 2026-09-25.
 Publication is a separate step. Do not claim upstream endorsement.
 
@@ -19,7 +19,8 @@ python3 scripts/release.py prepare
 ```
 
 This exports `HEAD` to a clean source directory, builds an arm64/x86_64 universal
-app, runs core/sanitizer/security/compiler/vision/sandbox/release-gate tests, checks the actual
+app, runs core, sanitizer, security, assembler, compiler, image-mutation, Vision,
+Explorer, Breach, GPU, search, AppKit, sandbox and release-gate tests, checks the actual
 signature/entitlements and architecture slices, and packages the app. Use
 `--ref <tag-or-commit>` for a different committed source or `--archs arm64` for
 a native-only candidate. Existing candidate directories are never overwritten.
@@ -112,8 +113,10 @@ Before publishing a binary release:
    compatible licensing. Preserve their original copyright and license notices.
 2. Add dated notices to modified original files. Keep AUTHORS, NOTICE.md and
    source provenance accurate; distinguish original work from fork changes.
-3. Run `make test sanitize security-check assembler-check assembler-sanitize image-fuzz-check compiler-check compiler-sanitize vision-check vision-sanitize sandbox-check verify-app release-check` and build the app from a clean checkout.
-   Record the commit, architecture, compiler and macOS versions used.
+3. Run `python3 scripts/release.py prepare` to build the app from a clean source
+   export and execute every required release gate, including normal and sanitized
+   guest-game, search and AppKit checks. Record the commit, architecture, compiler
+   and macOS versions used.
 4. Tag the exact source commit used to build the binary. Publish a complete
    corresponding source archive from that tag, including all required source,
    interface files, resources, license notices and build/installation scripts.
