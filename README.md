@@ -204,7 +204,7 @@ Developer ID signing and Apple notarization require Apple Developer Program memb
 - `upstream/tunguska-0.5/` — untouched source release, including its manual and experimental 3CC compiler.
 - `upstream/github/` — unchanged files from the original GitHub repository, whose commit history remains the ancestry of this fork.
 
-The debugger, memory inspector, breakpoints and modernized 3CC build are implemented. Next priorities are stronger process isolation, broader instruction-set and compiler conformance tests, source labels in the debugger, and Apple Developer ID signing/notarization once account access is restored. Universal local previews remain ad-hoc signed. The original guest software, experimental 3CC language and instruction set have not been exhaustively validated beyond the tests above.
+The debugger, memory inspector, breakpoints and modernized 3CC build are implemented. The universal 0.12.1 release candidate has passed Developer ID signing, Apple notarization and Gatekeeper assessment; see [the release procedure](docs/RELEASING.md). Ordinary local builds remain ad-hoc signed previews. Next priorities are stronger process isolation, broader instruction-set and compiler conformance tests, and source labels in the debugger. The original guest software, experimental 3CC language and instruction set have not been exhaustively validated beyond the tests above.
 
 See [provenance and port notes](docs/PORTING.md) for the changes to the original implementation.
 

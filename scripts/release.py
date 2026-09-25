@@ -116,6 +116,24 @@ def choose_identity(requested):
     return matches[0]
 
 
+def write_distribution_notes(folder, manifest):
+    (folder / "READ-ME-FIRST.txt").write_text(
+        "DEVELOPER ID SIGNED — NOTARIZED — GATEKEEPER ACCEPTED\n\n"
+        "Tunguska " + manifest["version"] + " (build " + manifest["build"] + ")\n"
+        "Binary: " + manifest["binary_archive"] + "\n"
+        "Matching source: " + manifest["source_archive"] + "\n"
+        "Source commit: " + manifest["commit"] + "\n\n"
+        "Distribute the binary, matching complete source archive, and SHA256SUMS together.\n"
+        "Unzip the binary and move Tunguska.app to Applications. The app includes its notarization ticket.\n"
+        "App Sandbox and hardened runtime are enabled. No Gatekeeper bypass is needed.\n"
+        "Any LOCAL-PREVIEW.zip and notarization-upload.zip here are earlier artifacts; use the binary named above.\n\n"
+        "Original Tunguska: Viktor Lofgren. Independent fork: Vinny Lingham. GPL-2.0-or-later.\n"
+        "License, attribution and warranty notices accompany the app and complete source.\n"
+        "Built architectures: " + ", ".join(manifest["architectures"]) + ".\n"
+        "Runtime-tested architecture: " + manifest["runtime_tested_architecture"] + ".\n"
+        "Apple notarization does not replace an independent security audit.\n")
+
+
 def notarize(args):
     folder = args.folder.resolve()
     manifest = json.loads((folder / "manifest.json").read_text())
@@ -124,6 +142,7 @@ def notarize(args):
     app = folder / "Tunguska.app"
     if manifest["status"] == "notarized":
         verify(app, notarized=True)
+        write_distribution_notes(folder, manifest)
         print("Already notarized; matching app/source verified.")
         return
     if not manifest.get("notarization_id"):
@@ -167,6 +186,7 @@ def notarize(args):
     save_manifest(folder, manifest)
     (folder / "SHA256SUMS").write_text(manifest["binary_sha256"] + "  " + binary.name + "\n" +
                                        manifest["source_sha256"] + "  " + manifest["source_archive"] + "\n")
+    write_distribution_notes(folder, manifest)
     print("Notarized and Gatekeeper-accepted. Publish the binary, matching source archive, and SHA256SUMS together.")
 
 

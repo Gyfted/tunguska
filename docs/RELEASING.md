@@ -1,11 +1,14 @@
 # Source and binary release procedure
 
-This fork currently publishes source only. The local `.app` enables App Sandbox
-and hardened runtime, but its ad-hoc signature is a development preview, not a
-notarized distribution. Do not claim upstream endorsement. Developer ID signing
-and notarization are on hold while the owner restores Apple account access and
-installs the signing identity. The local preparation path is tested; the Apple
-submission path cannot be exercised without those credentials.
+This fork currently publishes source only. The universal 0.12.1 candidate
+(source commit `78d79bc4e66714532afbdfe7a7356452cb20cb82`) was Developer ID signed,
+accepted by Apple notarization, stapled and accepted by Gatekeeper on 2026-09-25.
+Publication is a separate step. Do not claim upstream endorsement.
+
+Ordinary `make app` builds and newly prepared candidates remain ad-hoc signed
+development previews. Both previews and notarized distributions enable App
+Sandbox and hardened runtime; use the manifest and verification commands below
+to distinguish their signing status.
 
 ## Prepare a local candidate and matching source
 
@@ -25,14 +28,16 @@ the release script always starts from a clean export.
 
 Artifacts are under `build/releases/<version>-<commit>/`:
 
-- `Tunguska.app` and `*-LOCAL-PREVIEW.zip`: ad-hoc signed local builds. Do not
-  describe them as Developer ID signed, notarized or Gatekeeper-approved.
+- `Tunguska.app`: the candidate, initially ad-hoc signed and updated in place by
+  notarization. Consult the manifest for its current status.
+- `*-LOCAL-PREVIEW.zip`: the original ad-hoc signed local build. It remains a
+  preview even after the separate app is notarized.
 - `*-source-<commit>.tar.gz`: complete corresponding source exported from the
   exact build commit, including original source copies, notices and build scripts.
 - `manifest.json`: source commit, source/app hashes, architectures, compiler and
   OS versions, and signing/notarization state.
 - `build-and-tests.log`: build and automated verification results.
-- `READ-ME-FIRST.txt`: preview status and attribution.
+- `READ-ME-FIRST.txt`: current release status, attribution and distribution instructions.
 
 Tests execute the host's architecture, even for universal builds. Verify the
 other slice on suitable hardware before claiming runtime support there.
@@ -78,7 +83,8 @@ submits the app archive to Apple. It records the submission ID before waiting.
 An interrupted wait can be resumed by rerunning the same command, without
 submitting a duplicate. After acceptance it staples the ticket, verifies it,
 and runs Gatekeeper assessment. It produces the final ZIP and `SHA256SUMS` only
-after those checks pass. A changed source archive/bundle, missing identity,
+after those checks pass, and updates `READ-ME-FIRST.txt` to identify the final
+binary and its matching source. A changed source archive/bundle, missing identity,
 extra entitlement, rejected submission or failed verification stops the process.
 
 The signing machine needs network access; the app itself has no network
