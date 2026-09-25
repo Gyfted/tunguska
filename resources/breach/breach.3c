@@ -256,6 +256,7 @@ void restart() {
     for(i=0;i<4;i++)BYTE(BR_ENEMIES+i)=1;
     PX=121;PY=121;ANGLE=9;HEALTH=9;AMMO=16;CELLS=0;KILLS=0;
     WORD(BR_TURN)=0;BYTE(BR_MAP_VISIBLE)=0;BYTE(BR_FLASH)=0;
+    BYTE(BR_EXPOSURE)=0;
     BYTE(BR_MESSAGE)=0;BYTE(BR_STATUS)=1;
 }
 void move(int dx,int dy) {
@@ -288,17 +289,26 @@ void shoot() {
     if(target>=0){BYTE(BR_ENEMIES+target)=0;KILLS++;BYTE(BR_MESSAGE)=5;sound(BR_SOUND_KILL);}
 }
 void sentinels() {
-    int i=0;
-    // Action-paced combat: no damage while the player is idle or reading.
-    if(WORD(BR_TURN)%4!=0)return;
+    int i=0;int threatened=0;
+    // Only successful movement or firing advances exposure. Looking around,
+    // blocked movement, empty clicks and reading are safe. Multiple sentinels
+    // share one attack phase so overlapping ranges cannot multiply damage.
     for(i=0;i<4;i++){if(BYTE(BR_ENEMIES+i)==1){
         if(absolute(objectX[i]-PX)+absolute(objectY[i]-PY)<260){
-            if(visible(objectX[i],objectY[i])==1){HEALTH--;BYTE(BR_MESSAGE)=6;sound(BR_SOUND_HIT);}
+            if(visible(objectX[i],objectY[i])==1){threatened=1;break;}
         }
     }}
+    if(threatened==0){BYTE(BR_EXPOSURE)=0;return;}
+    BYTE(BR_EXPOSURE)++;
+    if(BYTE(BR_EXPOSURE)<BR_ATTACK_ACTIONS){
+        if(BYTE(BR_MESSAGE)==0)BYTE(BR_MESSAGE)=7;
+        return;
+    }
+    BYTE(BR_EXPOSURE)=0;HEALTH--;BYTE(BR_MESSAGE)=6;sound(BR_SOUND_HIT);
     if(HEALTH<=0){HEALTH=0;BYTE(BR_STATUS)=BR_DEAD;sound(BR_SOUND_DEAD);}
 }
 void action(char key) {
+    int oldX=PX;int oldY=PY;char oldAmmo=AMMO;char oldMessage=BYTE(BR_MESSAGE);
     if((key>=50)&&(key<=75))key-=40;
     if(key=='R'){restart();return;}
     if((BYTE(BR_STATUS)==BR_DEAD)||(BYTE(BR_STATUS)==BR_WON))return;
@@ -314,7 +324,9 @@ void action(char key) {
     if(key=='D')ANGLE=(ANGLE+1)%36;
     if(key==' ')shoot();
     WORD(BR_TURN)=(WORD(BR_TURN)+1)%10000;
-    collect();if(BYTE(BR_STATUS)!=BR_WON)sentinels();
+    collect();
+    if((BYTE(BR_STATUS)!=BR_WON)&&((PX!=oldX)||(PY!=oldY)||(AMMO<oldAmmo)))sentinels();
+    else if((BYTE(BR_MESSAGE)==0)&&(oldMessage==7))BYTE(BR_MESSAGE)=7;
 }
 int active(int id) {
     if(id<4)return BYTE(BR_ENEMIES+id);
@@ -395,13 +407,20 @@ void render() {
     column(27,174,199,-364);
     paint=8;if(BYTE(BR_FLASH)==1){for(col=24;col<=30;col++)column(col,158+absolute(col-27)*3,171,364);}
     if(BYTE(BR_MAP_VISIBLE)==1)mapView();
+    if(BYTE(BR_MESSAGE)==6){
+        fill(-264262+26*54,2*54,364);fill(TG_VIDEO_ATTRIBUTES+26*54,2*54,3);
+        fill(-264262+203*54,2*54,364);fill(TG_VIDEO_ATTRIBUTES+203*54,2*54,3);
+    }
     paint=9;
     if(redrawHUD==1) {
         label("TERNARY BREACH",2,5);label("RECOVER 3 CELLS THEN REACH THE EXIT",2,16);
         label("HEALTH",2,211);label("AMMO",15,211);label("CELLS",26,211);label("DRONES",38,211);
         label("W S MOVE  A D TURN  Q E STRAFE  SPACE FIRE  M MAP",2,232);
     }
-    if((redrawHUD==1)||(HEALTH!=previousHealth))number(HEALTH,9,211);
+    if((redrawHUD==1)||(HEALTH!=previousHealth)){
+        if(HEALTH<=3)paint=3;
+        label("HEALTH",2,211);number(HEALTH,9,211);paint=9;
+    }
     if((redrawHUD==1)||(AMMO!=previousAmmo))number(AMMO,20,211);
     if((redrawHUD==1)||(CELLS!=previousCells))number(CELLS,32,211);
     if((redrawHUD==1)||(KILLS!=previousKills))number(KILLS,45,211);
@@ -414,14 +433,18 @@ void render() {
         if(BYTE(BR_MESSAGE)==4)label("NO AMMO  FIND THE SUPPLY CACHE",2,222);
         if(BYTE(BR_MESSAGE)==5)label("SENTINEL DISABLED",2,222);
         if(BYTE(BR_MESSAGE)==6)label("HIT  MOVE AWAY OR DISABLE THE SENTINEL",2,222);
+        if(BYTE(BR_MESSAGE)==7)label("SENTINEL TARGETING YOU  SPACE TO FIRE",2,222);
     }
     previousHealth=HEALTH;previousAmmo=AMMO;previousCells=CELLS;previousKills=KILLS;
     previousMessage=BYTE(BR_MESSAGE);redrawHUD=0;
     if((ending==BR_WON)||(ending==BR_DEAD)) {
-        paint=10;fill(-264262+86*54,35*54,-364);fill(TG_VIDEO_ATTRIBUTES+86*54,35*54,10);
-        if(ending==BR_WON)label("BREACH COMPLETE  YOU ESCAPED",13,93);
-        else label("SIGNAL LOST",21,93);
-        label("PRESS R TO RESTART",18,107);
+        paint=10;fill(-264262+86*54,43*54,-364);fill(TG_VIDEO_ATTRIBUTES+86*54,43*54,10);
+        if(ending==BR_WON){label("BREACH COMPLETE  YOU ESCAPED",13,93);label("PRESS R TO RESTART",18,107);}
+        else {
+            label("YOU WERE DEFEATED",19,93);
+            label("HEALTH DEPLETED BY SENTINELS",14,105);
+            label("PRESS R TO RESTART",18,117);
+        }
     }
     WORD(BR_FRAME)=(WORD(BR_FRAME)+1)%10000;
     if((ending==BR_WON)||(ending==BR_DEAD))BYTE(BR_STATUS)=ending;

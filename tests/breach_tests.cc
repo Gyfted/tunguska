@@ -95,6 +95,28 @@ int main(int argc,char** argv) {
         require(g.sounds&(1u<<BR_SOUND_START),"Missing start sound");
         if(argc>2)g.dump(argv[2]);
         std::cout<<"Boot frame: "<<g.runtime.cycles()<<" guest instructions\n"<<std::flush;
+        // Reproduce the reported "signal lost": entering the first corridor and
+        // merely looking around used to consume all nine health points.
+        for(int i=0;i<3;++i)g.key('w');
+        for(int i=0;i<36;++i)g.key('d');
+        require(g.byte(BR_HEALTH)==9 && g.byte(BR_STATUS)==BR_READY,"Looking around killed the player");
+        g.restart();
+        g.position(100,229,18);
+        for(int i=0;i<16;++i)g.key('w');
+        require(g.word(BR_X)==100 && g.byte(BR_HEALTH)==9 && g.byte(BR_EXPOSURE)==0,"Blocked movement advanced enemy attacks");
+        g.restart();g.position(202,202,9);g.byte(BR_AMMO,0);
+        for(int i=0;i<16;++i)g.key(' ');
+        require(g.byte(BR_HEALTH)==9 && g.byte(BR_EXPOSURE)==0,"Empty weapon advanced enemy attacks");
+        g.restart();g.position(202,202,9);
+        g.key('w');require(g.byte(BR_MESSAGE)==7 && g.byte(BR_EXPOSURE)==1 && g.byte(BR_HEALTH)==9,"First exposure must warn before damage");
+        g.position(121,121,9);g.key('s');
+        require(g.byte(BR_EXPOSURE)==0 && g.byte(BR_HEALTH)==9,"Retreat did not clear attack buildup");
+        // Both nearby sentinels can see the player in this open test arena.
+        g.restart();for(int row=1;row<11;++row)for(int col=1;col<11;++col)g.byte(BR_MAP+row*12+col,0);
+        g.position(323,323,0);
+        for(int i=0;i<BR_ATTACK_ACTIONS;++i)g.key(i%2?'s':'w');
+        require(g.byte(BR_HEALTH)==8 && g.byte(BR_EXPOSURE)==0,"Overlapping sentinels caused stacked damage");
+        g.restart();
         int y=g.word(BR_Y);g.key('w');require(g.word(BR_Y)==y+27,"Forward movement failed");
         require(g.sounds&(1u<<BR_SOUND_STEP),"Missing footstep sound");
         g.key('s');require(g.word(BR_Y)==y,"Backward movement failed");
@@ -110,11 +132,24 @@ int main(int argc,char** argv) {
         g.byte(BR_AMMO,0);g.position(202,202,9);g.key(' ');
         require(g.byte(BR_AMMO)==0 && g.byte(BR_ENEMIES)==1,"Empty weapon fired");
         require(g.sounds==(1u<<BR_SOUND_EMPTY),"Empty weapon sound wrong");
-        g.byte(BR_HEALTH,1);g.word(BR_TURN,3);g.key('a');
+        g.restart();g.position(202,202,9);g.byte(BR_HEALTH,2);
+        for(int i=0;i<BR_ATTACK_ACTIONS-1;++i)g.key(i%2?'s':'w');
+        require(g.byte(BR_HEALTH)==2 && g.byte(BR_EXPOSURE)==7,"Enemy ignored warning grace actions");
+        const int exposure=g.byte(BR_EXPOSURE);
+        g.key('a');g.key('d');g.key('m');g.key('m');
+        g.runtime.run(500000);
+        require(g.byte(BR_HEALTH)==2 && g.byte(BR_EXPOSURE)==exposure,"Aiming/map/idle advanced an attack");
+        require(g.byte(BR_MESSAGE)==7,"Aiming hid the incoming-attack warning");
+        g.key('s');require(g.byte(BR_HEALTH)==1 && g.byte(BR_MESSAGE)==6,"Enemy attack did not deal exactly one damage");
+        require(g.sounds==(1u<<BR_SOUND_STEP | 1u<<BR_SOUND_HIT),"Damage sound missing after grace actions");
+        const auto& hit=g.runtime.frame().pixels;
+        require(hit[26*324*4]==224 && hit[26*324*4+1]==84,"Incoming damage did not show its red border");
+        for(int i=0;i<BR_ATTACK_ACTIONS;++i)g.key(i%2?'s':'w');
         require(g.byte(BR_STATUS)==BR_DEAD,"Sentinel damage/death failed");
         require((g.sounds & ((1u<<BR_SOUND_HIT)|(1u<<BR_SOUND_DEAD)))==((1u<<BR_SOUND_HIT)|(1u<<BR_SOUND_DEAD)),"Missing damage/death sounds");
+        if(argc>2)g.dump((std::string(argv[2])+"-defeat.rgba").c_str());
         int deadX=g.word(BR_X);g.key('w');require(g.word(BR_X)==deadX,"Dead player moved");
-        g.restart();require(g.byte(BR_AMMO)==16 && g.byte(BR_KILLS)==0 && g.byte(BR_CELLS)==0,"Restart did not reset inventory");
+        g.restart();require(g.byte(BR_HEALTH)==9 && g.byte(BR_AMMO)==16 && g.byte(BR_KILLS)==0 && g.byte(BR_CELLS)==0 && g.byte(BR_EXPOSURE)==0,"Restart did not reset inventory and attack buildup");
         // A burst must preserve the shot behind movement events while a frame draws.
         for(char key:std::string("qqq "))g.runtime.key(key);
         for(int i=0;i<2000 && (g.word(BR_TURN)!=4 || g.byte(BR_STATUS)!=BR_READY);++i)g.runtime.run(1000);

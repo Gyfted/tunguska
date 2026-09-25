@@ -56,6 +56,8 @@ Hold movement/turn keys for continuous stepping without the typing-repeat delay.
 Version 0.15.0 adds colored scenery, distinct enemies and pickups, a bright muzzle
 flash and ten original synthesized sound effects. Click **Sound on / Muted** or
 press **⌘U** to mute; the setting is remembered.
+Version 0.15.1 makes aiming safe, warns before enemy attacks, and replaces the
+ambiguous “Signal lost” screen with a clear defeat message. Press **R** to restart.
 The original one-level game is compiled with 3CC: ray casting, sprites, collision,
 combat and HUD drawing all run on the ternary guest. A new color-attribute display
 mode preserves the packed 324 × 243 bitmap, and guest commands drive a bounded

@@ -32,9 +32,13 @@ Movement is step-based. Since 0.14.1, holding movement/turn keys repeats every
 75 milliseconds when the guest is ready, without macOS's typing delay. Holding
 Space repeats at 180 milliseconds; map and restart remain single-press actions.
 Releasing keys, changing focus or pausing clears held-key state; slow frames do
-not accumulate a backlog of repeats. Combat advances on player actions;
-sentinels can damage a nearby, visible player every fourth action. Waiting does
-not cause damage. A shot consumes one round; a hit disables one sentinel.
+not accumulate a backlog of repeats. Since 0.15.1, combat advances only on
+successful movement or firing. Turning to aim, map use, blocked movement, empty
+weapon clicks and waiting cannot advance an enemy attack. A nearby sentinel
+first shows **SENTINEL TARGETING YOU**; each eight exposed movement/firing actions
+can then cost one health point, even if several sentinels are nearby. Moving out
+of range or behind cover clears the buildup. This remains action-paced combat,
+not a wall-clock cooldown. A shot consumes one round; a hit disables one sentinel.
 Walls block both shots and sentinel attacks. The exit requires all three cells,
 but disabling every sentinel is optional. The game remains one level, without
 saved games, mouse aiming, or original Doom asset compatibility.
@@ -46,6 +50,11 @@ an empty weapon, footsteps and startup. The mute setting persists across launche
 Pausing or moving focus away silences the game; missed sounds are discarded.
 If an output device is unavailable, the game continues with sound disabled.
 
+Hits add a red border, and health turns red at three points or less. At zero
+health the screen says **YOU WERE DEFEATED — HEALTH DEPLETED BY SENTINELS** and
+**PRESS R TO RESTART**. The earlier “SIGNAL LOST” wording meant defeat, not a
+display, network or application failure.
+
 ## What really runs on the ternary machine?
 
 The `.3c` source implements integer DDA ray casting, sprite projection and wall
@@ -56,7 +65,8 @@ compiles to ordinary Tunguska instructions. The image contains no native game co
 The 324 × 243 display keeps six trit pixels packed in each tryte. The fork's new
 palette raster mode adds one palette attribute per six-pixel group, selecting
 three colors from a guest-controlled table. Breach uses twelve palettes. The
-guest chooses every attribute and draws the same bitmap geometry as 0.14.1.
+guest chooses every attribute. The initial color release preserved 0.14.1's
+bitmap geometry; 0.15.1 adds damage indicators and clearer defeat text.
 Wall columns are six pixels wide. A guest assembly loop fills spans six rows at
 a time, and the original AGDP block-set peripheral clears horizontal regions.
 The frontend converts the bitmap and attributes to display pixels. There are
@@ -103,6 +113,7 @@ The guest memory layout is in `src/breach_protocol.h`. Useful debugger addresses
 | 83000 | 54 wall distances (words) |
 | 84000 | 27-slot keyboard ring (one slot kept empty) |
 | 80040 / 80041 | Sound queue read / write positions |
+| 80025 | Exposed movement/firing actions toward the next attack (0–7) |
 | 85000 | 27-slot sound ring (one slot kept empty) |
 
 ## Build and validation
@@ -134,6 +145,11 @@ corruption, waveform bounds, mixing, voice limits and mute. Core tests exercise
 all 729 palette indices. The native audio test silently exercises the real output
 callback and its owned mixer lifetime, including under ASan/UBSan. It requires
 access to a working Mac audio output device.
+
+The 0.15.1 regressions reproduce the former death-by-turning problem and verify
+safe aiming, blocked movement, empty firing, map/idle safety, warning grace,
+retreat reset, a single damage point from overlapping sentinels, red hit feedback,
+death and restored health/attack state after restart.
 
 `make breach-benchmark` reports guest frame CPU time, executed instructions and
 a 60 Hz scheduling estimate over 210 frames. Set `BREACH_REFERENCE=/path/to/old.ternobj`
